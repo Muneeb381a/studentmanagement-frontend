@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { GraduationCap, Eye, EyeOff, LogIn } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -130,8 +130,16 @@ export default function LoginPage() {
             </button>
           </form>
 
+          {/* First-time setup link */}
+          <p className="text-center text-xs text-slate-500 mt-5">
+            New installation?{' '}
+            <Link to="/setup" className="text-indigo-400 hover:text-indigo-300 font-medium">
+              First time setup
+            </Link>
+          </p>
+
           {/* Demo accounts */}
-          <div className="mt-6 pt-6 border-t border-white/10">
+          <div className="mt-4 pt-4 border-t border-white/10">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3 text-center">
               Demo Accounts
             </p>

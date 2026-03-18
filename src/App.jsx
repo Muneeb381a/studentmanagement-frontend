@@ -53,6 +53,7 @@ import AttendancePrintPage      from './pages/AttendancePrintPage';
 import BoardExamsPage           from './pages/BoardExamsPage';
 import IncomePage               from './pages/IncomePage';
 import LeavePage                from './pages/LeavePage';
+import SetupPage                from './pages/SetupPage';
 
 /* Redirect / → role-appropriate home */
 function RoleRedirect() {
@@ -72,6 +73,7 @@ export default function App() {
           <Routes>
             {/* Public */}
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/setup" element={<SetupPage />} />
 
             {/* Root → smart redirect */}
             <Route path="/" element={

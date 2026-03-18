@@ -21,7 +21,7 @@ const ROLE_COLORS = {
 };
 
 // Paths that become submenu children under '/' for admin role
-const ADMIN_SUBMENU_PATHS = new Set(['/teacher-dashboard', '/student-dashboard']);
+const ADMIN_SUBMENU_PATHS = new Set(['/teacher-dashboard', '/student-dashboard', '/parent-dashboard']);
 
 const END_PATHS = new Set(['/', '/teacher-dashboard', '/student-dashboard', '/parent-dashboard']);
 

@@ -1755,7 +1755,19 @@ function SetupTab({ classes }) {
 
       {/* Fee Structures */}
       <div className="space-y-4">
-        <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2"><Settings2 size={16} className="text-emerald-500" />Fee Structures</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2"><Settings2 size={16} className="text-emerald-500" />Fee Structures</h2>
+          <button
+            onClick={() => {
+              const p = new URLSearchParams({ year: selYear, ...(selClass ? { class_id: selClass } : {}) });
+              window.open(`/fees/structure/print?${p}`, '_blank');
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-colors"
+            style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}
+          >
+            <Printer size={13} /> Print Structure
+          </button>
+        </div>
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <Sel label="Class *" value={selClass} onChange={setSelClass}>

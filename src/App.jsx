@@ -54,6 +54,7 @@ import BoardExamsPage           from './pages/BoardExamsPage';
 import IncomePage               from './pages/IncomePage';
 import LeavePage                from './pages/LeavePage';
 import SetupPage                from './pages/SetupPage';
+import FeeStructurePrintPage    from './pages/FeeStructurePrintPage';
 
 /* Redirect / → role-appropriate home */
 function RoleRedirect() {
@@ -228,6 +229,11 @@ export default function App() {
             <Route path="/fees/defaulters/print" element={
               <ProtectedRoute roles={['admin']}>
                 <FeeDefaultersPrintPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/fees/structure/print" element={
+              <ProtectedRoute roles={['admin']}>
+                <FeeStructurePrintPage />
               </ProtectedRoute>
             } />
             <Route path="/salary" element={

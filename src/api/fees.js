@@ -1,0 +1,56 @@
+import api from './axios';
+
+// Fee heads
+export const getFeeHeads    = (p)     => api.get('/fees/heads', { params: p });
+export const createFeeHead  = (d)     => api.post('/fees/heads', d);
+export const updateFeeHead  = (id, d) => api.put(`/fees/heads/${id}`, d);
+export const deleteFeeHead  = (id)    => api.delete(`/fees/heads/${id}`);
+
+// Fee structures
+export const getFeeStructures    = (p)     => api.get('/fees/structures', { params: p });
+export const upsertFeeStructure  = (d)     => api.post('/fees/structures', d);
+export const deleteFeeStructure  = (id)    => api.delete(`/fees/structures/${id}`);
+
+// Invoices
+export const getInvoices              = (p)         => api.get('/fees/invoices', { params: p });
+export const getInvoice               = (id)        => api.get(`/fees/invoices/${id}`);
+export const createInvoice            = (d)         => api.post('/fees/invoices', d);
+export const generateMonthlyFees      = (d)         => api.post('/fees/invoices/generate-monthly', d);
+export const generateAdmissionInvoice = (sid, d)    => api.post(`/fees/invoices/generate-admission/${sid}`, d);
+export const updateInvoice            = (id, d)     => api.put(`/fees/invoices/${id}`, d);
+export const cancelInvoice            = (id)        => api.delete(`/fees/invoices/${id}`);
+
+// Payments
+export const recordPayment      = (d)     => api.post('/fees/payments', d);
+export const bulkRecordPayments = (d)     => api.post('/fees/payments/bulk', d);
+export const getPayments        = (p)     => api.get('/fees/payments', { params: p });
+export const voidPayment        = (id, d) => api.delete(`/fees/payments/${id}`, { data: d });
+
+// Reports
+export const getMonthlySummary      = (p)  => api.get('/fees/reports/monthly-summary', { params: p });
+export const getOutstandingBalances = (p)  => api.get('/fees/reports/outstanding', { params: p });
+export const getStudentFeeHistory   = (id) => api.get(`/fees/reports/student/${id}`);
+export const getDashboardStats      = ()   => api.get('/fees/dashboard-stats');
+
+export const getExportURL = (params) => {
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  return `${base}/fees/export?${new URLSearchParams(params)}`;
+};
+
+// Print data
+export const getInvoicePrint   = (id)        => api.get(`/fees/invoices/${id}/print`);
+export const getChallanPrint   = (id)        => api.get(`/fees/invoices/${id}/challan`);
+export const getReceiptPrint   = (id)        => api.get(`/fees/payments/${id}/receipt`);
+export const getBulkPrintData  = (p = {})    => api.get('/fees/bulk-print', { params: p });
+
+// New reports
+export const getByClassReport = (p = {}) => api.get('/fees/reports/by-class', { params: p });
+export const getDailyReport   = (p = {}) => api.get('/fees/reports/daily',    { params: p });
+
+// Concessions
+export const getConcessions   = (p = {}) => api.get('/fees/concessions',       { params: p });
+export const saveConcession   = (d)      => api.post('/fees/concessions',      d);
+export const deleteConcession = (id)     => api.delete(`/fees/concessions/${id}`);
+
+// Late fees
+export const applyLateFees = (d) => api.post('/fees/invoices/apply-late-fees', d);

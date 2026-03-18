@@ -1,0 +1,35 @@
+import api from './axios';
+
+// Fetch for marking
+export const getClassStudentsAttendance = (classId, date, periodId) =>
+  api.get('/attendance/class-students', { params: { class_id: classId, date, period_id: periodId || undefined } });
+
+export const getTeachersAttendance = (date) =>
+  api.get('/attendance/teachers-status', { params: { date } });
+
+// Mark
+export const bulkMark  = (records)     => api.post('/attendance/bulk', { records });
+export const markSingle = (data)       => api.post('/attendance', data);
+
+// Edit / Delete
+export const updateAttendance = (id, data) => api.put(`/attendance/${id}`, data);
+export const deleteAttendance = (id)       => api.delete(`/attendance/${id}`);
+
+// Reports
+export const getMonthlySummary = (params) => api.get('/attendance/monthly',       { params });
+export const getDailySummary   = (params) => api.get('/attendance/daily-summary', { params });
+
+// Export — returns a URL to open in new tab
+export const getExportURL = (params) => {
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  const qs   = new URLSearchParams(params).toString();
+  return `${base}/attendance/export?${qs}`;
+};
+
+// History
+export const getStudentHistory = (studentId, month) =>
+  api.get(`/attendance/student/${studentId}/history`, { params: { month } });
+
+// Printable monthly register
+export const getAttendanceRegister = (classId, month) =>
+  api.get('/attendance/register', { params: { class_id: classId, month } });

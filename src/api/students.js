@@ -1,0 +1,34 @@
+import api from './axios';
+
+export const getStudents = (params = {}) =>
+  api.get('/students', { params });
+
+export const getStudent = (id) =>
+  api.get(`/students/${id}`);
+
+export const createStudent = (data) =>
+  api.post('/students', data);
+
+export const updateStudent = (id, data) =>
+  api.put(`/students/${id}`, data);
+
+export const deleteStudent = (id) =>
+  api.delete(`/students/${id}`);
+
+// body: { from_class_id, to_class_id, student_ids? }
+export const promoteStudents = (data) =>
+  api.post('/students/promote', data);
+
+// Photo upload (FormData with field "photo")
+export const uploadStudentPhoto = (id, formData) =>
+  api.post(`/students/${id}/photo`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+
+// Documents
+export const getStudentDocuments  = (id)           => api.get(`/students/${id}/documents`);
+export const uploadStudentDocument = (id, formData) =>
+  api.post(`/students/${id}/documents`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+export const deleteStudentDocument = (studentId, docId) =>
+  api.delete(`/students/${studentId}/documents/${docId}`);
+
+// Reset / get credentials
+export const resetStudentCredentials = (id) => api.post(`/students/${id}/reset-credentials`);

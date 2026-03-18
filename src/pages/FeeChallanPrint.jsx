@@ -1,0 +1,402 @@
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Printer, ArrowLeft, AlertCircle } from 'lucide-react';
+import { getChallanPrint } from '../api/fees';
+
+// ── Helpers ──────────────────────────────────────────────────
+const fmt = (n) =>
+  Number(n || 0).toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const fmtDate = (d) => {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-PK', { day: '2-digit', month: 'long', year: 'numeric' });
+};
+
+const challanNo = (invoiceNo) => {
+  if (!invoiceNo) return '—';
+  return invoiceNo.replace('INV-', 'CHN-');
+};
+
+const COPY_LABELS = [
+  { label: 'Bank Copy',    color: '#1e40af' },
+  { label: 'School Copy',  color: '#065f46' },
+  { label: 'Parent Copy',  color: '#7c2d12' },
+];
+
+// ── Print styles ─────────────────────────────────────────────
+const PRINT_STYLES = `
+  @media print {
+    body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .no-print { display: none !important; }
+    @page { margin: 8mm; size: A4; }
+    .challan-copy { page-break-inside: avoid; }
+    .cut-line { border-top: 1.5px dashed #9ca3af !important; }
+  }
+`;
+
+// ── Single challan copy ───────────────────────────────────────
+function ChallanCopy({ inv, items, settings, copyMeta }) {
+  const currency = settings.currency || 'PKR';
+  const netAmount = parseFloat(inv.net_amount || 0);
+  const balance   = parseFloat(inv.balance   || 0);
+  const isPaid    = inv.status === 'paid';
+
+  return (
+    <div
+      className="challan-copy"
+      style={{
+        fontFamily: "Arial",
+        fontSize: 11,
+        border: `2px solid ${copyMeta.color}`,
+        borderRadius: '6px',
+        overflow: 'hidden',
+        background: 'white',
+        pageBreakInside: 'avoid',
+      }}
+    >
+      {/* Header bar */}
+      <div style={{ background: copyMeta.color, color: 'white', padding: '6px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {settings.school_logo && (
+            <img
+              src={settings.school_logo}
+              alt="logo"
+              style={{ width: '32px', height: '32px', borderRadius: '4px', objectFit: 'contain', background: 'white', padding: '2px' }}
+            />
+          )}
+          <div>
+            <div style={{ fontWeight: 'bold', fontSize: '13px', lineHeight: '1.2' }}>
+              {settings.school_name || 'School Management System'}
+            </div>
+            {settings.school_address && (
+              <div style={{ fontSize: '9px', opacity: 0.9, marginTop: '1px' }}>{settings.school_address}</div>
+            )}
+          </div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontWeight: 'bold', fontSize: '14px', letterSpacing: '0.5px' }}>FEE CHALLAN</div>
+          <div
+            style={{
+              fontSize: '10px',
+              background: 'rgba(255,255,255,0.25)',
+              borderRadius: '3px',
+              padding: '1px 6px',
+              marginTop: '2px',
+              fontWeight: '600',
+            }}
+          >
+            {copyMeta.label}
+          </div>
+        </div>
+      </div>
+
+      {/* Challan meta row */}
+      <div style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', padding: '5px 12px', display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+        <div>
+          <span style={{ color: '#64748b', fontSize: '9px', fontWeight: '600', textTransform: 'uppercase' }}>Challan No.</span>
+          <div style={{ fontWeight: 'bold', color: copyMeta.color, fontSize: '12px' }}>{challanNo(inv.invoice_no)}</div>
+        </div>
+        <div>
+          <span style={{ color: '#64748b', fontSize: '9px', fontWeight: '600', textTransform: 'uppercase' }}>Month</span>
+          <div style={{ fontWeight: '600' }}>{inv.billing_month || '—'}</div>
+        </div>
+        <div>
+          <span style={{ color: '#64748b', fontSize: '9px', fontWeight: '600', textTransform: 'uppercase' }}>Issue Date</span>
+          <div style={{ fontWeight: '600' }}>{fmtDate(inv.issued_at)}</div>
+        </div>
+        <div>
+          <span style={{ color: '#64748b', fontSize: '9px', fontWeight: '600', textTransform: 'uppercase' }}>Due Date</span>
+          <div style={{ fontWeight: '600', color: '#dc2626' }}>{fmtDate(inv.due_date)}</div>
+        </div>
+        <div>
+          <span style={{ color: '#64748b', fontSize: '9px', fontWeight: '600', textTransform: 'uppercase' }}>Academic Year</span>
+          <div style={{ fontWeight: '600' }}>{inv.academic_year || '—'}</div>
+        </div>
+        {isPaid && (
+          <div style={{
+            marginLeft: 'auto',
+            background: '#dcfce7',
+            border: '1px solid #86efac',
+            color: '#15803d',
+            fontWeight: 'bold',
+            fontSize: '11px',
+            padding: '2px 10px',
+            borderRadius: '4px',
+            display: 'flex',
+            alignItems: 'center',
+          }}>
+            ✓ PAID
+          </div>
+        )}
+      </div>
+
+      {/* Student + Bank info two-col */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0', borderBottom: '1px solid #e2e8f0' }}>
+        {/* Student info */}
+        <div style={{ padding: '8px 12px', borderRight: '1px solid #e2e8f0' }}>
+          <div style={{ fontSize: '9px', fontWeight: '700', textTransform: 'uppercase', color: '#64748b', marginBottom: '5px', letterSpacing: '0.5px' }}>
+            Student Information
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+            <tbody>
+              {[
+                ['Student Name', inv.student_name],
+                ['Father Name',  inv.father_name],
+                ['Class',        inv.class_name ? `${inv.class_name}` : (inv.grade ? `${inv.grade}${inv.section ? ' ' + inv.section : ''}` : '—')],
+                ['Roll No.',     inv.roll_number],
+                ['Contact',      inv.father_phone || inv.student_phone],
+              ].map(([lbl, val]) => (
+                <tr key={lbl}>
+                  <td style={{ color: '#64748b', paddingRight: '6px', paddingBottom: '3px', whiteSpace: 'nowrap', width: '80px', verticalAlign: 'top' }}>
+                    {lbl}:
+                  </td>
+                  <td style={{ fontWeight: '600', paddingBottom: '3px', verticalAlign: 'top' }}>{val || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Bank info */}
+        <div style={{ padding: '8px 12px' }}>
+          <div style={{ fontSize: '9px', fontWeight: '700', textTransform: 'uppercase', color: '#64748b', marginBottom: '5px', letterSpacing: '0.5px' }}>
+            Bank Details
+          </div>
+          {settings.bank_name ? (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+              <tbody>
+                {[
+                  ['Bank Name',    settings.bank_name],
+                  ['Account Title',settings.bank_account_title],
+                  ['Account No.',  settings.bank_account_no],
+                  ['IBAN',         settings.bank_iban],
+                  ['Branch',       settings.bank_branch ? `${settings.bank_branch}${settings.bank_branch_code ? ' (' + settings.bank_branch_code + ')' : ''}` : '—'],
+                ].map(([lbl, val]) => (
+                  <tr key={lbl}>
+                    <td style={{ color: '#64748b', paddingRight: '6px', paddingBottom: '3px', whiteSpace: 'nowrap', width: '90px', verticalAlign: 'top' }}>
+                      {lbl}:
+                    </td>
+                    <td style={{ fontWeight: '600', paddingBottom: '3px', verticalAlign: 'top', wordBreak: 'break-all' }}>{val || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div style={{ color: '#94a3b8', fontSize: '10px', fontStyle: 'italic' }}>
+              Bank details not configured.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Fee breakdown table */}
+      <div style={{ padding: '8px 12px' }}>
+        <div style={{ fontSize: '9px', fontWeight: '700', textTransform: 'uppercase', color: '#64748b', marginBottom: '4px', letterSpacing: '0.5px' }}>
+          Fee Breakdown
+        </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+          <thead>
+            <tr style={{ background: '#f1f5f9' }}>
+              <th style={{ textAlign: 'left', padding: '4px 6px', borderBottom: '1px solid #e2e8f0', fontWeight: '700', color: '#475569' }}>#</th>
+              <th style={{ textAlign: 'left', padding: '4px 6px', borderBottom: '1px solid #e2e8f0', fontWeight: '700', color: '#475569' }}>Description</th>
+              <th style={{ textAlign: 'right', padding: '4px 6px', borderBottom: '1px solid #e2e8f0', fontWeight: '700', color: '#475569' }}>Amount ({currency})</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.filter(it => !it.is_waived).map((it, i) => (
+              <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                <td style={{ padding: '3px 6px', color: '#94a3b8' }}>{i + 1}</td>
+                <td style={{ padding: '3px 6px' }}>{it.head_name || it.description}</td>
+                <td style={{ padding: '3px 6px', textAlign: 'right', fontWeight: '600' }}>{fmt(it.amount)}</td>
+              </tr>
+            ))}
+            {parseFloat(inv.discount_amount) > 0 && (
+              <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                <td style={{ padding: '3px 6px', color: '#94a3b8' }}>—</td>
+                <td style={{ padding: '3px 6px', color: '#16a34a' }}>Discount / Concession</td>
+                <td style={{ padding: '3px 6px', textAlign: 'right', fontWeight: '600', color: '#16a34a' }}>- {fmt(inv.discount_amount)}</td>
+              </tr>
+            )}
+            {parseFloat(inv.fine_amount) > 0 && (
+              <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                <td style={{ padding: '3px 6px', color: '#94a3b8' }}>—</td>
+                <td style={{ padding: '3px 6px', color: '#dc2626' }}>Late Fine</td>
+                <td style={{ padding: '3px 6px', textAlign: 'right', fontWeight: '600', color: '#dc2626' }}>+ {fmt(inv.fine_amount)}</td>
+              </tr>
+            )}
+          </tbody>
+          <tfoot>
+            <tr style={{ background: copyMeta.color }}>
+              <td colSpan="2" style={{ padding: '5px 6px', color: 'white', fontWeight: 'bold', fontSize: '12px' }}>
+                Total Payable ({currency})
+              </td>
+              <td style={{ padding: '5px 6px', textAlign: 'right', color: 'white', fontWeight: 'bold', fontSize: '13px' }}>
+                {fmt(netAmount)}
+              </td>
+            </tr>
+            {parseFloat(inv.paid_amount) > 0 && (
+              <tr>
+                <td colSpan="2" style={{ padding: '3px 6px', color: '#16a34a', fontWeight: '600' }}>Amount Paid</td>
+                <td style={{ padding: '3px 6px', textAlign: 'right', color: '#16a34a', fontWeight: '600' }}>{fmt(inv.paid_amount)}</td>
+              </tr>
+            )}
+            {!isPaid && (
+              <tr style={{ background: '#fef2f2' }}>
+                <td colSpan="2" style={{ padding: '4px 6px', color: '#dc2626', fontWeight: 'bold' }}>Balance Due ({currency})</td>
+                <td style={{ padding: '4px 6px', textAlign: 'right', color: '#dc2626', fontWeight: 'bold', fontSize: '13px' }}>{fmt(balance)}</td>
+              </tr>
+            )}
+          </tfoot>
+        </table>
+      </div>
+
+      {/* Footer with signature lines */}
+      <div
+        style={{
+          background: '#f8fafc',
+          borderTop: '1px solid #e2e8f0',
+          padding: '5px 12px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-end',
+          fontSize: '9px',
+          color: '#94a3b8',
+        }}
+      >
+        <div>
+          <div style={{ borderTop: '1px solid #cbd5e1', paddingTop: '2px', marginTop: '14px', minWidth: '100px', textAlign: 'center' }}>
+            Bank Stamp &amp; Signature
+          </div>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontStyle: 'italic' }}>Please pay before due date to avoid late fine</div>
+          {settings.school_phone && <div>Tel: {settings.school_phone}</div>}
+          {settings.school_email && <div>{settings.school_email}</div>}
+        </div>
+        <div>
+          <div style={{ borderTop: '1px solid #cbd5e1', paddingTop: '2px', marginTop: '14px', minWidth: '100px', textAlign: 'center' }}>
+            School Stamp
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Page ─────────────────────────────────────────────────
+export default function FeeChallanPrint() {
+  const { id }     = useParams();
+  const navigate   = useNavigate();
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(null);
+
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = PRINT_STYLES;
+    document.head.appendChild(style);
+    return () => document.head.removeChild(style);
+  }, []);
+
+  useEffect(() => {
+    getChallanPrint(id)
+      .then(r => setData(r.data?.data ?? r.data))
+      .catch(err => setError(err.response?.data?.message || 'Failed to load challan'))
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  if (loading) return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
+      <div style={{ width: '36px', height: '36px', borderRadius: '50%', border: '4px solid #6366f1', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+
+  if (error) return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
+      <div style={{ textAlign: 'center', color: '#dc2626' }}>
+        <AlertCircle size={40} style={{ margin: '0 auto 8px' }} />
+        <p style={{ fontWeight: '600' }}>{error}</p>
+      </div>
+    </div>
+  );
+
+  const { invoice: inv, items, settings } = data;
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#e2e8f0', padding: '24px 16px' }}>
+
+      {/* Toolbar */}
+      <div
+        className="no-print"
+        style={{
+          maxWidth: '780px',
+          margin: '0 auto 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          background: 'white',
+          borderRadius: '12px',
+          padding: '12px 16px',
+          boxShadow: '0 1px 6px rgba(0,0,0,0.08)',
+        }}
+      >
+        <button
+          onClick={() => navigate(-1)}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', cursor: 'pointer', fontSize: '13px', fontWeight: '600', color: '#475569' }}
+        >
+          <ArrowLeft size={15} /> Back
+        </button>
+        <div style={{ flex: 1 }}>
+          <span style={{ fontWeight: '700', fontSize: '14px', color: '#1e293b' }}>Fee Challan</span>
+          <span style={{ marginLeft: '8px', fontSize: '12px', color: '#64748b' }}>
+            {challanNo(inv.invoice_no)} — {inv.student_name}
+          </span>
+        </div>
+        <button
+          onClick={() => window.print()}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 16px', borderRadius: '8px', background: '#6366f1', color: 'white', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}
+        >
+          <Printer size={15} /> Print Challan
+        </button>
+      </div>
+
+      {/* Three copies */}
+      <div style={{ maxWidth: '780px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '0' }}>
+        {COPY_LABELS.map((copyMeta, idx) => (
+          <div key={idx}>
+            <ChallanCopy inv={inv} items={items} settings={settings} copyMeta={copyMeta} />
+            {idx < COPY_LABELS.length - 1 && (
+              <div
+                className="cut-line"
+                style={{
+                  borderTop: '1.5px dashed #9ca3af',
+                  margin: '6px 0',
+                  position: 'relative',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <span
+                  className="no-print"
+                  style={{
+                    background: '#e2e8f0',
+                    padding: '0 8px',
+                    fontSize: '9px',
+                    color: '#9ca3af',
+                    fontWeight: '600',
+                    letterSpacing: '1px',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  ✂ Cut Here
+                </span>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

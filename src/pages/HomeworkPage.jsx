@@ -1,0 +1,283 @@
+import { useEffect, useState, useCallback } from 'react';
+import { Plus, BookOpen, Clock, CheckCircle, AlertCircle, Pencil, Trash2, X, Calendar } from 'lucide-react';
+import toast from 'react-hot-toast';
+import Layout from '../components/layout/Layout';
+import { StatCard } from '../components/ui/Card';
+import { PageLoader } from '../components/ui/Spinner';
+import { ConfirmDialog } from '../components/ui/Modal';
+import EmptyState from '../components/ui/EmptyState';
+import { getHomework, createHomework, updateHomework, deleteHomework } from '../api/homework';
+import { getClasses } from '../api/classes';
+import { getSubjects } from '../api/subjects';
+
+const STATUS_COLORS = {
+  active:    'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800/40',
+  completed: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800/40',
+  cancelled: 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
+};
+
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-PK', { day:'numeric', month:'short', year:'numeric' });
+}
+function isPast(d) { return d && new Date(d) < new Date(new Date().toDateString()); }
+
+/* ── Homework Form Modal ── */
+function HwModal({ hw, classes, subjects, onClose, onSaved }) {
+  const init = hw ? {
+    class_id: hw.class_id || '', subject_id: hw.subject_id || '',
+    title: hw.title || '', description: hw.description || '',
+    due_date: hw.due_date ? hw.due_date.slice(0,10) : '', status: hw.status || 'active',
+  } : { class_id:'', subject_id:'', title:'', description:'', due_date:'', status:'active' };
+
+  const [form, setForm] = useState(init);
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const inp = 'w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all';
+
+  const handleSave = async () => {
+    if (!form.title.trim()) return toast.error('Title required');
+    if (!form.due_date)     return toast.error('Due date required');
+    setSaving(true);
+    try {
+      if (hw) {
+        await updateHomework(hw.id, form);
+        toast.success('Homework updated');
+      } else {
+        await createHomework(form);
+        toast.success('Homework assigned');
+      }
+      onSaved();
+      onClose();
+    } catch (e) {
+      toast.error(e?.response?.data?.message || 'Save failed');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200/80 dark:border-slate-800 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between">
+          <h2 className="font-bold text-slate-800 dark:text-slate-100">{hw ? 'Edit Homework' : 'Assign Homework'}</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><X size={16} /></button>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Title *</label>
+            <input value={form.title} onChange={e => set('title', e.target.value)} className={inp} placeholder="e.g. Read Chapter 5" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Class</label>
+              <select value={form.class_id} onChange={e => set('class_id', e.target.value)} className={`${inp} appearance-none cursor-pointer`}>
+                <option value="">All Classes</option>
+                {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Subject</label>
+              <select value={form.subject_id} onChange={e => set('subject_id', e.target.value)} className={`${inp} appearance-none cursor-pointer`}>
+                <option value="">None</option>
+                {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Due Date *</label>
+            <input type="date" value={form.due_date} onChange={e => set('due_date', e.target.value)} className={inp} />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Description</label>
+            <textarea value={form.description} onChange={e => set('description', e.target.value)} rows={3}
+              className={`${inp} resize-none`} placeholder="Homework instructions…" />
+          </div>
+          {hw && (
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Status</label>
+              <select value={form.status} onChange={e => set('status', e.target.value)} className={`${inp} appearance-none cursor-pointer`}>
+                <option value="active">Active</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2 pt-1">
+          <button onClick={onClose} className="flex-1 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Cancel</button>
+          <button onClick={handleSave} disabled={saving} className="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold transition-colors">
+            {saving ? 'Saving…' : (hw ? 'Update' : 'Assign')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function HomeworkPage() {
+  const [items,       setItems]       = useState([]);
+  const [classes,     setClasses]     = useState([]);
+  const [subjects,    setSubjects]    = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [classFilter, setClassFilter] = useState('');
+  const [statusFilt,  setStatusFilt]  = useState('active');
+  const [modal,       setModal]       = useState(null); // null | 'new' | hw object
+  const [delTarget,   setDelTarget]   = useState(null);
+
+  const fetchHw = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = {};
+      if (classFilter) params.class_id = classFilter;
+      if (statusFilt)  params.status   = statusFilt;
+      const r = await getHomework(params);
+      setItems(Array.isArray(r.data) ? r.data : []);
+    } catch { toast.error('Failed to load homework'); }
+    finally { setLoading(false); }
+  }, [classFilter, statusFilt]);
+
+  useEffect(() => { fetchHw(); }, [fetchHw]);
+  useEffect(() => {
+    Promise.all([getClasses(), getSubjects()])
+      .then(([cr, sr]) => {
+        setClasses(Array.isArray(cr.data) ? cr.data : []);
+        setSubjects(Array.isArray(sr.data) ? sr.data : []);
+      }).catch(() => {});
+  }, []);
+
+  const handleDelete = async () => {
+    try {
+      await deleteHomework(delTarget.id);
+      toast.success('Homework deleted');
+      setDelTarget(null);
+      fetchHw();
+    } catch { toast.error('Delete failed'); }
+  };
+
+  const active    = items.filter(h => h.status === 'active').length;
+  const completed = items.filter(h => h.status === 'completed').length;
+  const overdue   = items.filter(h => h.status === 'active' && isPast(h.due_date)).length;
+
+  const selCls = 'px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30 appearance-none cursor-pointer transition-all';
+
+  return (
+    <Layout>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+
+        {/* Hero */}
+        <div className="relative overflow-hidden px-4 sm:px-6 lg:px-8 pt-8 pb-20"
+          style={{ background: 'linear-gradient(135deg, #2563eb, #7c3aed, #9333ea)' }}>
+          <div className="absolute -top-12 -right-12 w-56 h-56 bg-white/5 rounded-full" />
+          <div className="absolute -bottom-8 -left-8 w-40 h-40 bg-white/5 rounded-full" />
+          <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center">
+                  <BookOpen size={13} className="text-white" />
+                </div>
+                <span className="text-white/60 text-xs font-semibold uppercase tracking-widest">SchoolMS</span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-white">Homework</h1>
+              <p className="text-white/60 text-sm mt-1">Assign and track homework for all classes</p>
+            </div>
+            <button onClick={() => setModal('new')}
+              className="self-start sm:self-auto flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-blue-700 text-sm font-bold hover:bg-blue-50 transition-all shadow-lg">
+              <Plus size={15} /> Assign Homework
+            </button>
+          </div>
+        </div>
+
+        <div className="px-4 sm:px-6 lg:px-8 -mt-10 pb-10 space-y-5">
+
+          {/* Stats */}
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+            <StatCard label="Total"     value={items.length} icon={BookOpen}    gradientFrom="#2563eb" gradientTo="#7c3aed" iconBg="bg-blue-50 dark:bg-blue-500/10"   textColor="text-blue-600 dark:text-blue-400" />
+            <StatCard label="Active"    value={active}       icon={Clock}       gradientFrom="#0891b2" gradientTo="#2563eb" iconBg="bg-cyan-50 dark:bg-cyan-500/10"    textColor="text-cyan-600 dark:text-cyan-400" />
+            <StatCard label="Completed" value={completed}    icon={CheckCircle} gradientFrom="#059669" gradientTo="#0d9488" iconBg="bg-emerald-50 dark:bg-emerald-500/10" textColor="text-emerald-600 dark:text-emerald-400" />
+            <StatCard label="Overdue"   value={overdue}      icon={AlertCircle} gradientFrom="#dc2626" gradientTo="#f97316" iconBg="bg-red-50 dark:bg-red-500/10"      textColor="text-red-600 dark:text-red-400" />
+          </div>
+
+          {/* List */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="px-4 sm:px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex flex-wrap gap-3 items-center">
+              <select value={classFilter} onChange={e => setClassFilter(e.target.value)} className={selCls}>
+                <option value="">All Classes</option>
+                {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <select value={statusFilt} onChange={e => setStatusFilt(e.target.value)} className={selCls}>
+                <option value="">All Status</option>
+                <option value="active">Active</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+              <span className="ml-auto text-xs text-slate-400 font-medium">{items.length} item{items.length !== 1 ? 's' : ''}</span>
+            </div>
+
+            {loading ? <PageLoader /> : items.length === 0 ? (
+              <EmptyState icon={BookOpen} title="No homework found" description="Assign homework using the button above"
+                actionLabel="Assign Homework" onAction={() => setModal('new')} />
+            ) : (
+              <ul className="divide-y divide-slate-50 dark:divide-slate-800/60">
+                {items.map(h => {
+                  const past = isPast(h.due_date) && h.status === 'active';
+                  return (
+                    <li key={h.id} className="px-4 sm:px-5 py-4 flex items-start gap-4 hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition-colors group">
+                      <div className={`mt-0.5 w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${past ? 'bg-red-50 dark:bg-red-900/20' : 'bg-blue-50 dark:bg-blue-900/20'}`}>
+                        <BookOpen size={15} className={past ? 'text-red-500' : 'text-blue-600 dark:text-blue-400'} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start gap-2 flex-wrap">
+                          <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm leading-snug">{h.title}</p>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold border ${STATUS_COLORS[h.status]}`}>
+                            {h.status}
+                          </span>
+                          {past && <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold border bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800/40">Overdue</span>}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3 mt-1">
+                          {h.class_name && <span className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">{h.class_name}</span>}
+                          {h.subject_name && <span className="text-xs text-slate-500 dark:text-slate-400">{h.subject_name}</span>}
+                          <span className={`flex items-center gap-1 text-xs font-medium ${past ? 'text-red-500' : 'text-slate-400'}`}>
+                            <Calendar size={10} /> Due: {fmtDate(h.due_date)}
+                          </span>
+                        </div>
+                        {h.description && <p className="text-xs text-slate-400 dark:text-slate-600 mt-1 line-clamp-2">{h.description}</p>}
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-all mt-0.5">
+                        <button onClick={() => setModal(h)} className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all">
+                          <Pencil size={13} />
+                        </button>
+                        <button onClick={() => setDelTarget(h)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 transition-all">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {modal && (
+        <HwModal
+          hw={modal === 'new' ? null : modal}
+          classes={classes}
+          subjects={subjects}
+          onClose={() => setModal(null)}
+          onSaved={fetchHw}
+        />
+      )}
+      <ConfirmDialog
+        isOpen={Boolean(delTarget)}
+        title="Delete Homework"
+        message={`Delete "${delTarget?.title}"?`}
+        confirmLabel="Delete"
+        onConfirm={handleDelete}
+        onCancel={() => setDelTarget(null)}
+      />
+    </Layout>
+  );
+}

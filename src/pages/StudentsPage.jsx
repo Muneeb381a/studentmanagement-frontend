@@ -1,0 +1,465 @@
+import { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Search, Users, UserCheck, TrendingUp, Filter, X, Pencil, Trash2, Mail, Phone, CreditCard, ArrowUpCircle, FileText, BarChart2, Printer } from 'lucide-react';
+import toast from 'react-hot-toast';
+import Layout from '../components/layout/Layout';
+import { StatCard } from '../components/ui/Card';
+import { PageLoader } from '../components/ui/Spinner';
+import { ConfirmDialog } from '../components/ui/Modal';
+import Avatar from '../components/ui/Avatar';
+import Badge from '../components/ui/Badge';
+import EmptyState from '../components/ui/EmptyState';
+import Button from '../components/ui/Button';
+import { getStudents, deleteStudent, resetStudentCredentials, promoteStudents } from '../api/students';
+import { getClasses } from '../api/classes';
+import { useDebounce } from '../hooks/useDebounce';
+import { formatDate, toPct } from '../utils';
+
+/* ── Promote Modal ── */
+function PromoteModal({ classes, onClose, onDone }) {
+  const [fromClass, setFromClass] = useState('');
+  const [toClass,   setToClass]   = useState('');
+  const [saving,    setSaving]    = useState(false);
+
+  const selCls = 'w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 appearance-none cursor-pointer transition-all';
+
+  const handlePromote = async () => {
+    if (!fromClass || !toClass) return toast.error('Please select both classes');
+    if (fromClass === toClass) return toast.error('Source and destination must be different');
+    setSaving(true);
+    try {
+      const r = await promoteStudents({ from_class_id: Number(fromClass), to_class_id: Number(toClass) });
+      const msg = r.data?.message || r.message || 'Students promoted';
+      toast.success(msg);
+      onDone();
+      onClose();
+    } catch (e) {
+      toast.error(e?.response?.data?.message || 'Promotion failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const fromName = classes.find(c => String(c.id) === fromClass)?.name || '';
+  const toName   = classes.find(c => String(c.id) === toClass)?.name   || '';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200/80 dark:border-slate-800 p-6 space-y-5">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center">
+            <ArrowUpCircle size={18} className="text-indigo-600 dark:text-indigo-400" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">Promote Students</h2>
+            <p className="text-xs text-slate-400">Move all active students from one class to another</p>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">From Class</label>
+            <select value={fromClass} onChange={e => setFromClass(e.target.value)} className={selCls}>
+              <option value="">Select source class…</option>
+              {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div className="flex items-center justify-center text-slate-300 dark:text-slate-700 text-xl">↓</div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">To Class</label>
+            <select value={toClass} onChange={e => setToClass(e.target.value)} className={selCls}>
+              <option value="">Select destination class…</option>
+              {classes.filter(c => String(c.id) !== fromClass).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {fromClass && toClass && (
+          <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 text-xs text-amber-700 dark:text-amber-400">
+            All <strong>active</strong> students in <strong>{fromName}</strong> will be moved to <strong>{toName}</strong>.
+          </div>
+        )}
+
+        <div className="flex gap-2 pt-1">
+          <button onClick={onClose} className="flex-1 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+            Cancel
+          </button>
+          <button onClick={handlePromote} disabled={saving || !fromClass || !toClass}
+            className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold transition-colors">
+            {saving ? 'Promoting…' : 'Promote Students'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Filter chip ── */
+function Chip({ label, onRemove }) {
+  return (
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 text-xs font-semibold border border-indigo-200/60 dark:border-indigo-500/20">
+      {label}
+      <button onClick={onRemove} className="rounded-full hover:bg-indigo-200/50 dark:hover:bg-indigo-500/20 p-0.5 transition-colors">
+        <X size={10} />
+      </button>
+    </span>
+  );
+}
+
+export default function StudentsPage() {
+  const navigate = useNavigate();
+  const [students,      setStudents]      = useState([]);
+  const [classes,       setClasses]       = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [search,        setSearch]        = useState('');
+  const [classFilter,   setClassFilter]   = useState('');
+  const [statusFilter,  setStatusFilter]  = useState('');
+  const [showFilters,   setShowFilters]   = useState(false);
+  const [deleteTarget,  setDeleteTarget]  = useState(null);
+  const [showPromote,   setShowPromote]   = useState(false);
+
+  const debouncedSearch = useDebounce(search);
+
+  const fetchStudents = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await getStudents({ search: debouncedSearch, status: statusFilter, class_id: classFilter });
+      setStudents(Array.isArray(res.data) ? res.data : []);
+    } catch { toast.error('Failed to load students'); }
+    finally { setLoading(false); }
+  }, [debouncedSearch, statusFilter, classFilter]);
+
+  useEffect(() => { getClasses().then(r => setClasses(Array.isArray(r.data) ? r.data : [])).catch(() => {}); }, []);
+  useEffect(() => { fetchStudents(); }, [fetchStudents]);
+
+  const handleDelete = async () => {
+    try {
+      await deleteStudent(deleteTarget.id);
+      toast.success('Student deleted');
+      setDeleteTarget(null);
+      fetchStudents();
+    } catch { toast.error('Failed to delete student'); }
+  };
+
+  const total   = students.length;
+  const active  = students.filter(s => s.status === 'active').length;
+  const males   = students.filter(s => s.gender === 'Male').length;
+  const females = students.filter(s => s.gender === 'Female').length;
+
+  const activeFilters = [
+    classFilter  && { label: classes.find(c => String(c.id) === classFilter)?.name || 'Class', clear: () => setClassFilter('') },
+    statusFilter && { label: `Status: ${statusFilter}`, clear: () => setStatusFilter('') },
+  ].filter(Boolean);
+
+  const selCls = 'w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 appearance-none cursor-pointer transition-all';
+
+  return (
+    <Layout>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+
+        {/* ── Hero ── */}
+        <div className="relative overflow-hidden px-4 sm:px-6 lg:px-8 pt-8 pb-20"
+          style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed, #9333ea)' }}>
+          <div className="absolute -top-12 -right-12 w-56 h-56 bg-white/5 rounded-full" />
+          <div className="absolute -bottom-8 -left-8 w-40 h-40 bg-white/5 rounded-full" />
+          <div className="absolute inset-0 opacity-[0.05]"
+            style={{ backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
+
+          <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center">
+                  <Users size={13} className="text-white" />
+                </div>
+                <span className="text-white/60 text-xs font-semibold uppercase tracking-widest">SchoolMS</span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-white">Students</h1>
+              <p className="text-white/60 text-sm mt-1">Manage enrolled students and records</p>
+            </div>
+            <div className="flex flex-wrap gap-2 self-start sm:self-auto">
+              <button
+                onClick={() => {
+                  const p = new URLSearchParams();
+                  if (classFilter) { p.set('class_id', classFilter); const cn = classes.find(c => String(c.id) === classFilter)?.name || ''; if (cn) p.set('class_name', cn); }
+                  window.open(`/students/id-cards?${p}`, '_blank');
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-white text-sm font-semibold transition-all border border-white/30"
+              >
+                <CreditCard size={14} /> ID Cards
+              </button>
+              <button
+                onClick={() => setShowPromote(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-white text-sm font-semibold transition-all border border-white/30"
+              >
+                <ArrowUpCircle size={14} /> Promote
+              </button>
+              <Button
+                onClick={() => navigate('/admission/new')}
+                className="self-start sm:self-auto bg-white! text-indigo-700 hover:bg-indigo-50!"
+                style={{ background: '#fff', color: '#4338ca' }}
+              >
+                <Plus size={15} /> Add Student
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-4 sm:px-6 lg:px-8 -mt-10 pb-10 space-y-5">
+
+          {/* ── Stats ── */}
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+            <StatCard label="Total"   value={total}   icon={Users}      gradientFrom="#6366f1" gradientTo="#8b5cf6" iconBg="bg-indigo-50 dark:bg-indigo-500/10"  textColor="text-indigo-600 dark:text-indigo-400"  sub="All enrolled" />
+            <StatCard label="Active"  value={active}  icon={UserCheck}  gradientFrom="#10b981" gradientTo="#0d9488" iconBg="bg-emerald-50 dark:bg-emerald-500/10" textColor="text-emerald-600 dark:text-emerald-400" pct={toPct(active, total)} />
+            <StatCard label="Male"    value={males}   icon={Users}      gradientFrom="#3b82f6" gradientTo="#06b6d4" iconBg="bg-blue-50 dark:bg-blue-500/10"      textColor="text-blue-600 dark:text-blue-400"      pct={toPct(males, total)} />
+            <StatCard label="Female"  value={females} icon={TrendingUp} gradientFrom="#ec4899" gradientTo="#f43f5e" iconBg="bg-pink-50 dark:bg-pink-500/10"      textColor="text-pink-600 dark:text-pink-400"      pct={toPct(females, total)} />
+          </div>
+
+          {/* ── Table card ── */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
+
+            {/* Toolbar */}
+            <div className="px-4 sm:px-5 py-4 border-b border-slate-100 dark:border-slate-800 space-y-3">
+              <div className="flex items-center gap-3 flex-wrap">
+                {/* Search */}
+                <div className="relative flex-1 min-w-52">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <input
+                    value={search} onChange={e => setSearch(e.target.value)}
+                    placeholder="Search name, email, B-Form…"
+                    className="w-full pl-9 pr-9 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all"
+                  />
+                  {search && (
+                    <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Filter toggle */}
+                <button
+                  onClick={() => setShowFilters(v => !v)}
+                  className={[
+                    'flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold border transition-all shrink-0',
+                    showFilters || activeFilters.length > 0
+                      ? 'bg-indigo-50 dark:bg-indigo-500/10 border-indigo-200 dark:border-indigo-500/30 text-indigo-700 dark:text-indigo-400'
+                      : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-indigo-200 dark:hover:border-indigo-700',
+                  ].join(' ')}
+                >
+                  <Filter size={14} />
+                  <span className="hidden sm:inline">Filters</span>
+                  {activeFilters.length > 0 && (
+                    <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-bold flex items-center justify-center leading-none">
+                      {activeFilters.length}
+                    </span>
+                  )}
+                </button>
+
+                <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-600 font-medium ml-auto shrink-0">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                  {students.length} result{students.length !== 1 ? 's' : ''}
+                </div>
+              </div>
+
+              {/* Filter panel */}
+              {showFilters && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Class</label>
+                    <select value={classFilter} onChange={e => setClassFilter(e.target.value)} className={selCls}>
+                      <option value="">All Classes</option>
+                      {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Status</label>
+                    <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className={selCls}>
+                      <option value="">All Status</option>
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                      <option value="suspended">Suspended</option>
+                      <option value="graduated">Graduated</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Active chips */}
+              {activeFilters.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <span className="text-xs text-slate-400 font-medium">Active:</span>
+                  {activeFilters.map((f, i) => <Chip key={i} label={f.label} onRemove={f.clear} />)}
+                  <button
+                    onClick={() => { setClassFilter(''); setStatusFilter(''); }}
+                    className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-medium underline underline-offset-2 transition-colors"
+                  >
+                    Clear all
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Table / Loading / Empty */}
+            {loading ? (
+              <PageLoader />
+            ) : students.length === 0 ? (
+              <EmptyState
+                icon={Users}
+                title="No students found"
+                description={search || activeFilters.length > 0 ? 'Try adjusting your filters' : 'Add your first student to get started'}
+                actionLabel={!search && activeFilters.length === 0 ? 'Add Student' : undefined}
+                onAction={() => navigate('/admission/new')}
+              />
+            ) : (
+              <>
+                {/* Mobile cards */}
+                <ul className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+                  {students.map(s => (
+                    <li key={s.id} className="flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                      <Avatar name={s.full_name} id={s.id} size="lg" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold text-sm text-slate-800 dark:text-slate-200 truncate">{s.full_name}</p>
+                          <Badge type="status" value={s.status || 'active'}>{s.status || 'active'}</Badge>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                          {(s.class_name || s.grade) && (
+                            <span className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 text-[10px] font-semibold border border-indigo-100 dark:border-indigo-800/50">
+                              {s.class_name || s.grade}
+                            </span>
+                          )}
+                          {s.phone && <span className="text-[10px] text-slate-400 font-medium">{s.phone}</span>}
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1 shrink-0">
+                        <button title="Performance" onClick={() => navigate(`/students/${s.id}/performance`)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/30 transition-all">
+                          <BarChart2 size={14} />
+                        </button>
+                        <button title="Print Profile" onClick={() => window.open(`/students/${s.id}/print`, '_blank')}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-all">
+                          <Printer size={14} />
+                        </button>
+                        <button onClick={() => navigate(`/admission/edit/${s.id}`)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all">
+                          <Pencil size={14} />
+                        </button>
+                        <button onClick={() => setDeleteTarget(s)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 transition-all">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+
+                {/* Desktop table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-50/80 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-800">
+                        {['Student', 'Class', 'B-Form', 'Contact', 'Status', 'Admitted', 'Actions'].map(h => (
+                          <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-[0.08em] whitespace-nowrap first:pl-5">
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 dark:divide-slate-800/60">
+                      {students.map(s => (
+                        <tr key={s.id} className="group hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition-colors">
+                          <td className="px-4 py-3 pl-5">
+                            <div className="flex items-center gap-3">
+                              <Avatar name={s.full_name} id={s.id} />
+                              <div className="min-w-0">
+                                <p className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-40 leading-none">{s.full_name}</p>
+                                {s.email && (
+                                  <p className="text-xs text-slate-400 dark:text-slate-600 truncate max-w-40 mt-0.5 flex items-center gap-1">
+                                    <Mail size={10} className="shrink-0" />{s.email}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {s.class_name
+                              ? <span className="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 text-xs font-semibold border border-indigo-100 dark:border-indigo-800/50">{s.class_name}</span>
+                              : <span className="text-slate-400 text-xs">{s.grade || '—'}</span>
+                            }
+                          </td>
+                          <td className="px-4 py-3 font-mono text-xs text-slate-500 whitespace-nowrap">
+                            {s.b_form_no || <span className="text-slate-300 dark:text-slate-700">—</span>}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {s.phone
+                              ? <span className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400"><Phone size={11} className="text-slate-400 shrink-0" />{s.phone}</span>
+                              : <span className="text-slate-300 dark:text-slate-700 text-xs">—</span>
+                            }
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <Badge type="status" value={s.status || 'active'}>{s.status || 'active'}</Badge>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">
+                            {formatDate(s.admission_date)}
+                          </td>
+                          <td className="px-4 py-3 pr-5">
+                            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                              <button title="Performance"
+                                onClick={() => navigate(`/students/${s.id}/performance`)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/30 transition-all">
+                                <BarChart2 size={13} />
+                              </button>
+                              <button title="Print Profile"
+                                onClick={() => window.open(`/students/${s.id}/print`, '_blank')}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-all">
+                                <Printer size={13} />
+                              </button>
+                              <button title="Leaving Certificate"
+                                onClick={() => window.open(`/students/certificate?type=leaving&student_id=${s.id}`, '_blank')}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-all">
+                                <FileText size={13} />
+                              </button>
+                              <button title="Character Certificate"
+                                onClick={() => window.open(`/students/certificate?type=character&student_id=${s.id}`, '_blank')}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-all">
+                                <FileText size={13} />
+                              </button>
+                              <button onClick={() => navigate(`/admission/edit/${s.id}`)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all">
+                                <Pencil size={13} />
+                              </button>
+                              <button onClick={() => setDeleteTarget(s)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 transition-all">
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        <ConfirmDialog
+          isOpen={Boolean(deleteTarget)}
+          title="Delete Student"
+          message={`Are you sure you want to delete "${deleteTarget?.full_name}"? This action cannot be undone.`}
+          confirmLabel="Delete"
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+
+        {showPromote && (
+          <PromoteModal
+            classes={classes}
+            onClose={() => setShowPromote(false)}
+            onDone={fetchStudents}
+          />
+        )}
+      </div>
+    </Layout>
+  );
+}

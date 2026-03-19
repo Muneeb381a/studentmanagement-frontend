@@ -55,6 +55,7 @@ import IncomePage               from './pages/IncomePage';
 import LeavePage                from './pages/LeavePage';
 import SetupPage                from './pages/SetupPage';
 import FeeStructurePrintPage    from './pages/FeeStructurePrintPage';
+import SyllabusPage             from './pages/SyllabusPage';
 
 /* Redirect / → role-appropriate home */
 function RoleRedirect() {
@@ -289,6 +290,11 @@ export default function App() {
             <Route path="/leaves" element={
               <ProtectedRoute roles={['admin']}>
                 <LeavePage />
+              </ProtectedRoute>
+            } />
+            <Route path="/syllabus" element={
+              <ProtectedRoute roles={['admin', 'teacher']}>
+                <SyllabusPage />
               </ProtectedRoute>
             } />
 

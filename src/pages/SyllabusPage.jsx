@@ -95,7 +95,7 @@ export default function SyllabusPage() {
 
   const handleSave = async () => {
     if (!form.topic.trim()) return toast.error('Topic name is required');
-    if (!selClass || !selSubj) return toast.error('Select a class and subject first');
+    if (modal === 'add' && (!selClass || !selSubj)) return toast.error('Select a class and subject first');
     setSaving(true);
     try {
       if (modal === 'add') {

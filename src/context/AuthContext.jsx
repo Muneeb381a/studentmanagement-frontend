@@ -1,33 +1,49 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-import { login as apiLogin } from '../api/auth';
+import { createContext, useContext, useState } from 'react';
+import { login as apiLogin, logout as apiLogout } from '../api/auth';
+import { tokenStorage } from '../api/axios';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user,    setUser]    = useState(() => {
+  const [user, setUser] = useState(() => {
     try { return JSON.parse(localStorage.getItem('user')); }
     catch { return null; }
   });
-  const [loading, setLoading] = useState(false);
 
+  /**
+   * Sign in — stores both access + refresh tokens and user profile.
+   * The login endpoint now returns { accessToken, refreshToken, user }.
+   */
   const signIn = async (username, password) => {
     const res = await apiLogin({ username, password });
-    // login endpoint returns { token, user } — not unwrapped (object, not array)
-    const { token, user: u } = res.data?.data ?? res.data;
-    localStorage.setItem('token', token);
+    // Response is an object (not array), so the axios interceptor won't unwrap it.
+    const payload = res.data?.data ?? res.data;
+    const { accessToken, refreshToken, user: u } = payload;
+
+    tokenStorage.setAccess(accessToken);
+    tokenStorage.setRefresh(refreshToken);
     localStorage.setItem('user', JSON.stringify(u));
     setUser(u);
     return u;
   };
 
-  const signOut = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setUser(null);
+  /**
+   * Sign out — revokes the refresh token on the server, then clears local state.
+   * Errors are swallowed so a failed network call never prevents local logout.
+   */
+  const signOut = async () => {
+    try {
+      await apiLogout({ refreshToken: tokenStorage.getRefresh() });
+    } catch {
+      // Ignore — server may already have revoked the token
+    } finally {
+      tokenStorage.clear();
+      setUser(null);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );

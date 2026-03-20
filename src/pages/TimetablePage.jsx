@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { CalendarDays, Plus, Pencil, Trash2, Clock, BookOpen, ChevronDown, X, Save, AlertCircle, Printer } from 'lucide-react';
+import { CalendarDays, Plus, Pencil, Trash2, Clock, BookOpen, ChevronDown, X, Save, AlertCircle, Printer, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Layout from '../components/layout/Layout';
-import { getPeriods, createPeriod, updatePeriod, deletePeriod, getTimetable, upsertEntry, deleteEntry } from '../api/timetable';
+import { getPeriods, createPeriod, updatePeriod, deletePeriod, getTimetable, upsertEntry, deleteEntry, getConflicts } from '../api/timetable';
 import { getClasses } from '../api/classes';
 import { getTeachers } from '../api/teachers';
 
@@ -165,10 +165,10 @@ function PeriodModal({ period, onClose, onSaved }) {
 }
 
 // ─── Slot Modal ──────────────────────────────────────────────
-function SlotModal({ slot, classId, periodId, dayNum, dayLabel, periodName, academicYear, teachers, onClose, onSaved }) {
+function SlotModal({ slot, classId, periodId, dayNum, dayLabel, periodName, academicYear, teachers, isConflicted, conflictInfo, onClose, onSaved }) {
   const [form, setForm] = useState({
     subject:    slot?.subject    || '',
-    teacher_id: slot?.teacher_id || '',
+    teacher_id: slot?.teacher_id ? String(slot.teacher_id) : '',
     room:       slot?.room       || '',
   });
   const [saving, setSaving] = useState(false);
@@ -218,6 +218,18 @@ function SlotModal({ slot, classId, periodId, dayNum, dayLabel, periodName, acad
             <X size={18} />
           </button>
         </div>
+
+        {/* Conflict warning banner */}
+        {isConflicted && conflictInfo && (
+          <div className="mx-6 mt-4 flex items-start gap-2.5 px-3.5 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40">
+            <AlertTriangle size={15} className="text-red-500 mt-0.5 shrink-0" />
+            <p className="text-xs text-red-700 dark:text-red-400 leading-relaxed">
+              <span className="font-semibold">Schedule conflict:</span> Teacher is also assigned to{' '}
+              <span className="font-semibold">{conflictInfo.conflict_class}{conflictInfo.conflict_section ? ` – ${conflictInfo.conflict_section}` : ''}</span>{' '}
+              at this period. Reassign or clear to resolve.
+            </p>
+          </div>
+        )}
 
         <form onSubmit={handleSave} className="p-6 space-y-4">
           <div>
@@ -284,6 +296,7 @@ export default function TimetablePage() {
   const [teachers,      setTeachers]      = useState([]);
   const [periods,       setPeriods]       = useState([]);
   const [entries,       setEntries]       = useState([]);
+  const [conflicts,     setConflicts]     = useState([]);   // double-booked slots
 
   const [selectedClass, setSelectedClass] = useState('');
   const [academicYear,  setAcademicYear]  = useState('2024-25');
@@ -314,8 +327,13 @@ export default function TimetablePage() {
     if (!selectedClass) return;
     setLoading(true);
     try {
-      const res = await getTimetable(selectedClass, academicYear);
-      setEntries(Array.isArray(res.data) ? res.data : []);
+      const [ttRes, cfRes] = await Promise.all([
+        getTimetable(selectedClass, academicYear),
+        getConflicts(selectedClass, academicYear),
+      ]);
+      setEntries(Array.isArray(ttRes.data) ? ttRes.data : []);
+      const cfData = cfRes.data?.data ?? cfRes.data;
+      setConflicts(Array.isArray(cfData) ? cfData : []);
     } catch {
       toast.error('Failed to load timetable');
     } finally { setLoading(false); }
@@ -331,6 +349,10 @@ export default function TimetablePage() {
   // Build entry lookup: { periodId_dayNum: entry }
   const entryMap = {};
   entries.forEach(e => { entryMap[`${e.period_id}_${e.day_of_week}`] = e; });
+
+  // Build conflict lookup: { periodId_dayNum: conflictRow }
+  const conflictMap = {};
+  conflicts.forEach(c => { conflictMap[`${c.period_id}_${c.day_of_week}`] = c; });
 
   const selectedClassObj = classes.find(c => String(c.id) === String(selectedClass));
 
@@ -539,7 +561,23 @@ export default function TimetablePage() {
                     </div>
                     <span className="font-semibold text-slate-800 dark:text-slate-100 text-sm">{selectedClassObj.name}</span>
                     <span className="text-xs text-slate-400">{selectedClassObj.grade} – Section {selectedClassObj.section} · {academicYear}</span>
+                    {conflicts.length > 0 && (
+                      <span className="ml-2 flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-600 border border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800/40">
+                        <AlertTriangle size={11} /> {conflicts.length} conflict{conflicts.length > 1 ? 's' : ''}
+                      </span>
+                    )}
                     {loading && <div className="ml-auto w-4 h-4 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />}
+                  </div>
+                )}
+
+                {/* Conflict warning banner */}
+                {conflicts.length > 0 && (
+                  <div className="mx-5 mt-3 flex items-start gap-2.5 px-3.5 py-2.5 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40">
+                    <AlertTriangle size={14} className="text-red-500 mt-0.5 shrink-0" />
+                    <p className="text-xs text-red-700 dark:text-red-400">
+                      <span className="font-semibold">{conflicts.length} scheduling conflict{conflicts.length > 1 ? 's' : ''} detected.</span>{' '}
+                      Highlighted cells have a teacher assigned to another class at the same period. Click the cell to reassign.
+                    </p>
                   </div>
                 )}
 
@@ -578,8 +616,10 @@ export default function TimetablePage() {
 
                           {/* Day cells */}
                           {DAYS.map(d => {
-                            const entry = entryMap[`${p.id}_${d.num}`];
-                            const color = subjectColor(entry?.subject);
+                            const key        = `${p.id}_${d.num}`;
+                            const entry      = entryMap[key];
+                            const conflict   = conflictMap[key];
+                            const color      = subjectColor(entry?.subject);
 
                             if (p.is_break) {
                               return (
@@ -592,25 +632,32 @@ export default function TimetablePage() {
                             return (
                               <td key={d.num} className="px-2 py-2 border-b border-slate-100 dark:border-slate-800">
                                 <button
-                                  onClick={() => setSlotModal({ entry, periodId: p.id, dayNum: d.num, dayLabel: d.label, periodName: p.name })}
-                                  className="w-full min-h-[56px] rounded-xl transition-all hover:scale-[1.02] hover:shadow-md text-left p-2 border"
-                                  style={color
-                                    ? { background: color.bg, borderColor: color.border }
-                                    : { background: 'transparent', borderColor: 'transparent' }
+                                  onClick={() => setSlotModal({ entry, periodId: p.id, dayNum: d.num, dayLabel: d.label, periodName: p.name, conflict })}
+                                  className="w-full min-h-[56px] rounded-xl transition-all hover:scale-[1.02] hover:shadow-md text-left p-2 border relative"
+                                  style={conflict
+                                    ? { background: '#fff1f2', borderColor: '#fca5a5', borderWidth: '2px' }
+                                    : color
+                                      ? { background: color.bg, borderColor: color.border }
+                                      : { background: 'transparent', borderColor: 'transparent' }
                                   }
                                 >
+                                  {conflict && (
+                                    <span className="absolute top-1 right-1">
+                                      <AlertTriangle size={10} className="text-red-400" />
+                                    </span>
+                                  )}
                                   {entry?.subject ? (
                                     <div>
-                                      <div className="text-xs font-semibold leading-tight" style={{ color: color?.text }}>
+                                      <div className="text-xs font-semibold leading-tight" style={{ color: conflict ? '#be123c' : color?.text }}>
                                         {entry.subject}
                                       </div>
                                       {entry.teacher_name && (
-                                        <div className="text-xs mt-0.5 opacity-75 truncate" style={{ color: color?.text }}>
+                                        <div className="text-xs mt-0.5 opacity-75 truncate" style={{ color: conflict ? '#be123c' : color?.text }}>
                                           {entry.teacher_name.split(' ').slice(0,2).join(' ')}
                                         </div>
                                       )}
                                       {entry.room && (
-                                        <div className="text-xs mt-0.5 opacity-60" style={{ color: color?.text }}>
+                                        <div className="text-xs mt-0.5 opacity-60" style={{ color: conflict ? '#be123c' : color?.text }}>
                                           {entry.room}
                                         </div>
                                       )}
@@ -630,9 +677,14 @@ export default function TimetablePage() {
                   </table>
                 </div>
 
-                <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-400 flex items-center gap-1.5">
+                <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-400 flex items-center gap-1.5 flex-wrap">
                   <span>Click any cell to assign a subject &amp; teacher.</span>
                   <span className="text-indigo-400">{filledSlots} / {totalSlots} slots filled.</span>
+                  {conflicts.length > 0 && (
+                    <span className="text-red-400 flex items-center gap-1">
+                      <AlertTriangle size={11} /> {conflicts.length} conflict{conflicts.length > 1 ? 's' : ''} (red cells)
+                    </span>
+                  )}
                 </div>
               </div>
             )}
@@ -749,6 +801,8 @@ export default function TimetablePage() {
           periodName={slotModal.periodName}
           academicYear={academicYear}
           teachers={teachers}
+          isConflicted={!!slotModal.conflict}
+          conflictInfo={slotModal.conflict}
           onClose={() => setSlotModal(null)}
           onSaved={() => { setSlotModal(null); loadTimetable(); }}
         />

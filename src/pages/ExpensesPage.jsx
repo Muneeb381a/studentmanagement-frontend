@@ -5,14 +5,16 @@ import {
   TrendingUp, TrendingDown, Wallet, BarChart3,
   RefreshCw, X, ChevronDown, Receipt, PieChart,
   CalendarDays, Tag, CreditCard, FileText, DollarSign,
-  ArrowUpRight, ArrowDownRight, Download,
+  ArrowUpRight, ArrowDownRight, Download, Upload,
 } from 'lucide-react';
 import Layout   from '../components/layout/Layout';
 import {
   getCategories, createCategory, updateCategory,
   getExpenses, createExpense, updateExpense, deleteExpense,
   getExpenseSummary, getMonthlyReport, getYearlyReport, getByCategoryReport,
+  getExpenseImportTemplate, importExpenses, exportExpenses,
 } from '../api/expenses';
+import ImportModal from '../components/ui/ImportModal';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 const fmt = (n) =>
@@ -339,6 +341,7 @@ export default function ExpensesPage() {
   const [expModal, setExpModal]   = useState(null);   // null | 'new' | expense obj
   const [catModal, setCatModal]   = useState(null);   // null | 'new' | category obj
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [showImport, setShowImport] = useState(false);
 
   // ── Loaders ──────────────────────────────────────────────
   const loadCategories = useCallback(async () => {
@@ -693,6 +696,14 @@ export default function ExpensesPage() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                <button onClick={() => setShowImport(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                  <Upload size={13} /> Import
+                </button>
+                <a href={exportExpenses({ format: 'xlsx' })}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                  <Download size={13} /> Export Excel
+                </a>
                 <button onClick={exportCSV}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
                   <Download size={13} /> Export CSV
@@ -983,6 +994,16 @@ export default function ExpensesPage() {
           onClose={() => setCatModal(null)}
         />
       )}
+
+      <ImportModal
+        isOpen={showImport}
+        onClose={() => { setShowImport(false); loadExpenses(); }}
+        title="Import Expenses"
+        templateFn={getExpenseImportTemplate}
+        importFn={importExpenses}
+        templateName="expenses_template.csv"
+        description="Upload a CSV with columns: date, title, amount, category, payment_method, vendor, reference_number, notes"
+      />
 
       {/* Delete confirm */}
       {deleteTarget && (

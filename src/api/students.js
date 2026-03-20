@@ -32,3 +32,19 @@ export const deleteStudentDocument = (studentId, docId) =>
 
 // Reset / get credentials
 export const resetStudentCredentials = (id) => api.post(`/students/${id}/reset-credentials`);
+
+// Import / Export
+export const getStudentImportTemplate = () =>
+  api.get('/students/import/template', { responseType: 'blob' });
+
+export const importStudents = (formData) =>
+  api.post('/students/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+
+export const exportStudents = (params = {}) => {
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  return `${base}/students/export?${new URLSearchParams(params)}`;
+};
+
+// Soft-delete / restore
+export const getDeletedStudents = () => api.get('/students/deleted');
+export const restoreStudent     = (id) => api.post(`/students/${id}/restore`);

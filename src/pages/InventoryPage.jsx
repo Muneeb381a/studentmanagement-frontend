@@ -4,6 +4,7 @@ import {
   Package, Plus, Pencil, Trash2, Search, X, AlertTriangle,
   BoxSelect, Wrench, FlaskConical, Printer, BookOpen, Dumbbell,
   Monitor, MoreHorizontal, TrendingDown, AlertCircle, BarChart3,
+  Upload, Download,
 } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { PageLoader } from '../components/ui/Spinner';
@@ -12,7 +13,9 @@ import Button from '../components/ui/Button';
 import {
   getInventoryItems, getInventorySummary,
   createInventoryItem, updateInventoryItem, deleteInventoryItem,
+  getInventoryImportTemplate, importInventory, exportInventory,
 } from '../api/inventory';
+import ImportModal from '../components/ui/ImportModal';
 
 const CATEGORIES = [
   { value: 'furniture',   label: 'Furniture',     icon: BoxSelect },
@@ -184,6 +187,7 @@ export default function InventoryPage() {
   const [filterCond, setFilterCond] = useState('');
   const [modal,      setModal]      = useState(null);
   const [deleting,   setDeleting]   = useState(null);
+  const [showImport, setShowImport] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -226,9 +230,23 @@ export default function InventoryPage() {
               <h1 className="text-sm font-bold text-slate-800 dark:text-white">Inventory</h1>
               <p className="text-xs text-slate-400 hidden sm:block">School assets and stock management</p>
             </div>
-            <Button onClick={() => setModal('add')} style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
-              <Plus size={14} /> Add Item
-            </Button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowImport(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                <Upload size={14} /> Import
+              </button>
+              <a
+                href={exportInventory({ format: 'xlsx' })}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                <Download size={14} /> Export
+              </a>
+              <Button onClick={() => setModal('add')} style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+                <Plus size={14} /> Add Item
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -360,6 +378,16 @@ export default function InventoryPage() {
           onSaved={() => { setModal(null); load(); }}
         />
       )}
+
+      <ImportModal
+        isOpen={showImport}
+        onClose={() => { setShowImport(false); load(); }}
+        title="Import Inventory"
+        templateFn={getInventoryImportTemplate}
+        importFn={importInventory}
+        templateName="inventory_template.csv"
+        description="Upload a CSV with columns: name, category, quantity, unit, condition, location, purchase_date, purchase_price, supplier, notes"
+      />
     </Layout>
   );
 }

@@ -34,3 +34,19 @@ export const uploadTeacherDocument = (id, formData) =>
 
 export const deleteTeacherDocument = (teacherId, docId) =>
   api.delete(`/teachers/${teacherId}/documents/${docId}`);
+
+// Import / Export
+export const getTeacherImportTemplate = () =>
+  api.get('/teachers/import/template', { responseType: 'blob' });
+
+export const importTeachers = (formData) =>
+  api.post('/teachers/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+
+export const exportTeachers = (params = {}) => {
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  return `${base}/teachers/export?${new URLSearchParams(params)}`;
+};
+
+// Soft-delete / restore
+export const getDeletedTeachers = () => api.get('/teachers/deleted');
+export const restoreTeacher     = (id) => api.post(`/teachers/${id}/restore`);

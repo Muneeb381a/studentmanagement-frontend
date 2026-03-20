@@ -2,17 +2,18 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   GraduationCap, Plus, Search, X, Pencil, Trash2, Eye,
-  Users, UserCheck, TrendingUp, Mail, Phone, BookOpen,
+  Users, UserCheck, TrendingUp, Mail, Phone, BookOpen, Upload, Download,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Layout from '../components/layout/Layout';
 import { StatCard } from '../components/ui/Card';
 import { PageLoader } from '../components/ui/Spinner';
 import { ConfirmDialog } from '../components/ui/Modal';
+import ImportModal from '../components/ui/ImportModal';
 import Avatar from '../components/ui/Avatar';
 import EmptyState from '../components/ui/EmptyState';
 import TeacherFormModal from '../components/TeacherFormModal';
-import { getTeachers, createTeacher, updateTeacher, deleteTeacher } from '../api/teachers';
+import { getTeachers, createTeacher, updateTeacher, deleteTeacher, getTeacherImportTemplate, importTeachers, exportTeachers } from '../api/teachers';
 import { toPct, formatDate } from '../utils';
 import { TEACHER_STATUS_STYLES } from '../constants';
 
@@ -116,6 +117,7 @@ export default function TeachersPage() {
   const [modalOpen,    setModalOpen]    = useState(false);
   const [editTarget,   setEditTarget]   = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [showImport,   setShowImport]   = useState(false);
 
   const fetchTeachers = useCallback(async () => {
     setLoading(true);
@@ -187,12 +189,26 @@ export default function TeachersPage() {
               <h1 className="text-2xl sm:text-3xl font-extrabold text-white">Teachers</h1>
               <p className="text-white/60 text-sm mt-1">Manage staff, subjects and class assignments</p>
             </div>
-            <button
-              onClick={() => { setEditTarget(null); setModalOpen(true); }}
-              className="flex items-center gap-2 px-5 py-2.5 bg-white text-emerald-700 text-sm font-bold rounded-xl shadow-lg hover:bg-emerald-50 transition-all hover:scale-105 self-start sm:self-auto shrink-0"
-            >
-              <Plus size={16} /> Add Teacher
-            </button>
+            <div className="flex flex-wrap gap-2 self-start sm:self-auto shrink-0">
+              <button
+                onClick={() => setShowImport(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-white text-sm font-semibold transition-all border border-white/30"
+              >
+                <Upload size={14} /> Import
+              </button>
+              <a
+                href={exportTeachers({ format: 'xlsx' })}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-white text-sm font-semibold transition-all border border-white/30"
+              >
+                <Download size={14} /> Export
+              </a>
+              <button
+                onClick={() => { setEditTarget(null); setModalOpen(true); }}
+                className="flex items-center gap-2 px-5 py-2.5 bg-white text-emerald-700 text-sm font-bold rounded-xl shadow-lg hover:bg-emerald-50 transition-all hover:scale-105"
+              >
+                <Plus size={16} /> Add Teacher
+              </button>
+            </div>
           </div>
         </div>
 
@@ -273,6 +289,16 @@ export default function TeachersPage() {
         confirmLabel="Delete"
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      <ImportModal
+        isOpen={showImport}
+        onClose={() => setShowImport(false)}
+        title="Import Teachers"
+        templateFn={getTeacherImportTemplate}
+        importFn={importTeachers}
+        templateName="teachers_template.csv"
+        description="Upload a CSV with columns: full_name, gender, email, phone, subject, qualification, join_date, salary, status"
       />
     </Layout>
   );

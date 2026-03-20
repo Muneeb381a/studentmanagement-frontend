@@ -5,3 +5,15 @@ export const getInventorySummary = ()        => api.get('/inventory/summary');
 export const createInventoryItem = (data)    => api.post('/inventory', data);
 export const updateInventoryItem = (id, data)=> api.put(`/inventory/${id}`, data);
 export const deleteInventoryItem = (id)      => api.delete(`/inventory/${id}`);
+
+// Import / Export
+export const getInventoryImportTemplate = () =>
+  api.get('/inventory/import/template', { responseType: 'blob' });
+
+export const importInventory = (formData) =>
+  api.post('/inventory/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+
+export const exportInventory = (params = {}) => {
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  return `${base}/inventory/export?${new URLSearchParams(params)}`;
+};

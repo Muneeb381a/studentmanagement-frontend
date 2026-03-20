@@ -54,3 +54,15 @@ export const deleteConcession = (id)     => api.delete(`/fees/concessions/${id}`
 
 // Late fees
 export const applyLateFees = (d) => api.post('/fees/invoices/apply-late-fees', d);
+
+// Payment import
+export const getFeePaymentImportTemplate = () =>
+  api.get('/fees/payments/import/template', { responseType: 'blob' });
+
+export const importFeePayments = (formData) =>
+  api.post('/fees/payments/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+
+export const exportFeesExcel = (params = {}) => {
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  return `${base}/fees/export?${new URLSearchParams({ ...params, format: 'xlsx' })}`;
+};

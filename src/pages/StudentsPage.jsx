@@ -1,16 +1,17 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Users, UserCheck, TrendingUp, Filter, X, Pencil, Trash2, Mail, Phone, CreditCard, ArrowUpCircle, FileText, BarChart2, Printer } from 'lucide-react';
+import { Plus, Search, Users, UserCheck, TrendingUp, Filter, X, Pencil, Trash2, Mail, Phone, CreditCard, ArrowUpCircle, FileText, BarChart2, Printer, Upload, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Layout from '../components/layout/Layout';
 import { StatCard } from '../components/ui/Card';
 import { PageLoader } from '../components/ui/Spinner';
 import { ConfirmDialog } from '../components/ui/Modal';
+import ImportModal from '../components/ui/ImportModal';
 import Avatar from '../components/ui/Avatar';
 import Badge from '../components/ui/Badge';
 import EmptyState from '../components/ui/EmptyState';
 import Button from '../components/ui/Button';
-import { getStudents, deleteStudent, resetStudentCredentials, promoteStudents } from '../api/students';
+import { getStudents, deleteStudent, resetStudentCredentials, promoteStudents, getStudentImportTemplate, importStudents, exportStudents } from '../api/students';
 import { getClasses } from '../api/classes';
 import { useDebounce } from '../hooks/useDebounce';
 import { formatDate, toPct } from '../utils';
@@ -117,6 +118,7 @@ export default function StudentsPage() {
   const [showFilters,   setShowFilters]   = useState(false);
   const [deleteTarget,  setDeleteTarget]  = useState(null);
   const [showPromote,   setShowPromote]   = useState(false);
+  const [showImport,    setShowImport]    = useState(false);
 
   const debouncedSearch = useDebounce(search);
 
@@ -193,6 +195,18 @@ export default function StudentsPage() {
               >
                 <ArrowUpCircle size={14} /> Promote
               </button>
+              <button
+                onClick={() => setShowImport(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-white text-sm font-semibold transition-all border border-white/30"
+              >
+                <Upload size={14} /> Import
+              </button>
+              <a
+                href={exportStudents({ format: 'xlsx' })}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-white text-sm font-semibold transition-all border border-white/30"
+              >
+                <Download size={14} /> Export
+              </a>
               <Button
                 onClick={() => navigate('/admission/new')}
                 className="self-start sm:self-auto bg-white! text-indigo-700 hover:bg-indigo-50!"
@@ -459,6 +473,16 @@ export default function StudentsPage() {
             onDone={fetchStudents}
           />
         )}
+
+        <ImportModal
+          isOpen={showImport}
+          onClose={() => setShowImport(false)}
+          title="Import Students"
+          templateFn={getStudentImportTemplate}
+          importFn={importStudents}
+          templateName="students_template.csv"
+          description="Upload a CSV with columns: full_name, gender, date_of_birth, grade, class_name, phone, email, address, father_name, father_phone, admission_date, status, b_form_no"
+        />
       </div>
     </Layout>
   );

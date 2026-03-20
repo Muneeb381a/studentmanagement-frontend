@@ -17,3 +17,15 @@ export const getExpenseById  = (id)          => api.get(`/expenses/${id}`);
 export const createExpense   = (data)        => api.post('/expenses',         data);
 export const updateExpense   = (id, data)    => api.put(`/expenses/${id}`,    data);
 export const deleteExpense   = (id)          => api.delete(`/expenses/${id}`);
+
+// Import / Export
+export const getExpenseImportTemplate = () =>
+  api.get('/expenses/import/template', { responseType: 'blob' });
+
+export const importExpenses = (formData) =>
+  api.post('/expenses/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+
+export const exportExpenses = (params = {}) => {
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  return `${base}/expenses/export?${new URLSearchParams(params)}`;
+};

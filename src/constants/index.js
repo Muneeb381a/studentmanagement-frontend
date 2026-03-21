@@ -22,6 +22,8 @@ import {
   MessageSquare,
   BookText,
   ListChecks,
+  BarChart3,
+  FileText,
 } from 'lucide-react';
 
 /* ── Navigation links ── */
@@ -195,6 +197,24 @@ export const NAV_LINKS = [
     to: '/syllabus',
     icon: ListChecks,
     description: 'Curriculum topics & completion tracking',
+  },
+  {
+    label: 'Financial Analytics',
+    to: '/analytics/financial',
+    icon: BarChart3,
+    description: 'P&L, expenses & fee collection',
+  },
+  {
+    label: 'Annual Report',
+    to: '/analytics/annual-report',
+    icon: FileText,
+    description: 'School-year summary report',
+  },
+  {
+    label: 'Custom Report',
+    to: '/analytics/custom-report',
+    icon: ClipboardList,
+    description: 'Build & export custom reports',
   },
 ];
 

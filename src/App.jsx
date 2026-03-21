@@ -56,6 +56,9 @@ import LeavePage                from './pages/LeavePage';
 import SetupPage                from './pages/SetupPage';
 import FeeStructurePrintPage    from './pages/FeeStructurePrintPage';
 import SyllabusPage             from './pages/SyllabusPage';
+import FinancialAnalyticsPage   from './pages/FinancialAnalyticsPage';
+import AnnualReportPage         from './pages/AnnualReportPage';
+import CustomReportPage         from './pages/CustomReportPage';
 
 /* Redirect / → role-appropriate home */
 function RoleRedirect() {
@@ -302,6 +305,21 @@ export default function App() {
             <Route path="/students/:id/performance" element={
               <ProtectedRoute roles={['admin', 'teacher']}>
                 <StudentPerformancePage />
+              </ProtectedRoute>
+            } />
+            <Route path="/analytics/financial" element={
+              <ProtectedRoute roles={['admin']}>
+                <FinancialAnalyticsPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/analytics/annual-report" element={
+              <ProtectedRoute roles={['admin']}>
+                <AnnualReportPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/analytics/custom-report" element={
+              <ProtectedRoute roles={['admin', 'teacher']}>
+                <CustomReportPage />
               </ProtectedRoute>
             } />
 

@@ -1,13 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, GraduationCap, Mail, Phone, BookOpen,
   Users, Calendar, Award, MapPin, Pencil, Eye,
   Camera, FileText, Trash2, Upload, ExternalLink,
+  BarChart3, RefreshCw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
 import Layout from '../components/layout/Layout';
 import { PageLoader } from '../components/ui/Spinner';
+import Spinner from '../components/ui/Spinner';
 import Avatar from '../components/ui/Avatar';
 import Badge from '../components/ui/Badge';
 import EmptyState from '../components/ui/EmptyState';
@@ -17,6 +23,7 @@ import {
   getTeacher, getTeacherClasses, getTeacherStudents, updateTeacher,
   uploadTeacherPhoto, getTeacherDocuments, uploadTeacherDocument, deleteTeacherDocument,
 } from '../api/teachers';
+import { getTeacherMetrics } from '../api/analytics';
 import { formatDate, toPct } from '../utils';
 import { TEACHER_STATUS_STYLES } from '../constants';
 
@@ -231,6 +238,141 @@ function DocumentsTab({ teacherId }) {
   );
 }
 
+/* ── Performance Metrics tab ── */
+function MetricsTab({ teacherId }) {
+  const [data,    setData]    = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    getTeacherMetrics(teacherId)
+      .then(r => setData(r.data?.data ?? r.data))
+      .catch(() => toast.error('Failed to load metrics'))
+      .finally(() => setLoading(false));
+  }, [teacherId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (loading) return <div className="flex justify-center py-20"><Spinner /></div>;
+  if (!data)   return null;
+
+  const cardCls = 'bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden';
+
+  return (
+    <div className="space-y-5">
+      {/* Summary KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {[
+          { label: 'Classes',        value: data.summary?.totalClasses    ?? '—', color: '#6366f1' },
+          { label: 'Students',       value: data.summary?.totalStudents   ?? '—', color: '#8b5cf6' },
+          { label: 'Homework Assigned', value: data.summary?.totalHomework ?? '—', color: '#f59e0b' },
+          { label: 'Syllabus Topics', value: data.summary?.totalTopics    ?? '—', color: '#10b981' },
+        ].map(k => (
+          <div key={k.label} className={`${cardCls} px-4 py-4`}>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{k.label}</p>
+            <p className="text-2xl font-black mt-1" style={{ color: k.color }}>{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Monthly attendance chart */}
+      {data.monthlyAttendance?.length > 0 && (
+        <div className={cardCls}>
+          <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BarChart3 size={14} className="text-indigo-500" />
+              <h3 className="text-sm font-bold text-slate-800 dark:text-white">Student Attendance (Monthly)</h3>
+            </div>
+            <button onClick={load} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+              <RefreshCw size={13} />
+            </button>
+          </div>
+          <div className="p-5">
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={data.monthlyAttendance} barCategoryGap="25%">
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                <YAxis domain={[0, 100]} tickFormatter={v => `${v}%`} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                <Tooltip formatter={v => [`${v}%`, 'Attendance Rate']} contentStyle={{ borderRadius: 10, border: 'none', fontSize: 12 }} />
+                <Bar dataKey="rate" name="Attendance %" fill="#6366f1" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Syllabus completion by subject */}
+        {data.syllabusCompletion?.length > 0 && (
+          <div className={cardCls}>
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-sm font-bold text-slate-800 dark:text-white">Syllabus Completion</h3>
+            </div>
+            <div className="p-5 space-y-3">
+              {data.syllabusCompletion.map(sub => {
+                const pct = parseFloat(sub.completion_pct) || 0;
+                const color = pct >= 80 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444';
+                return (
+                  <div key={sub.subject_name}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate flex-1">{sub.subject_name}</span>
+                      <span className="text-xs font-bold ml-2 tabular-nums" style={{ color }}>{pct.toFixed(0)}%</span>
+                    </div>
+                    <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(pct, 100)}%`, background: color }} />
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{sub.completed_topics}/{sub.total_topics} topics</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Avg student marks by subject */}
+        {data.marksBySubject?.length > 0 && (
+          <div className={cardCls}>
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-sm font-bold text-slate-800 dark:text-white">Avg Student Score by Subject</h3>
+            </div>
+            <div className="p-5">
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={data.marksBySubject} layout="vertical" barCategoryGap="20%">
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
+                  <XAxis type="number" domain={[0, 100]} tickFormatter={v => `${v}%`} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="subject_name" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={80} />
+                  <Tooltip formatter={v => [`${parseFloat(v).toFixed(1)}%`, 'Avg Score']} contentStyle={{ borderRadius: 10, border: 'none', fontSize: 12 }} />
+                  <Bar dataKey="avg_pct" name="Avg Score" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Homework per week */}
+      {data.homeworkPerWeek?.length > 0 && (
+        <div className={cardCls}>
+          <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+            <h3 className="text-sm font-bold text-slate-800 dark:text-white">Homework Assigned per Week</h3>
+          </div>
+          <div className="p-5">
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={data.homeworkPerWeek} barCategoryGap="25%">
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                <XAxis dataKey="week" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                <Tooltip formatter={v => [v, 'Homework']} contentStyle={{ borderRadius: 10, border: 'none', fontSize: 12 }} />
+                <Bar dataKey="count" name="Homework" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════════ */
 export default function TeacherDetailPage() {
   const { id }   = useParams();
@@ -293,7 +435,7 @@ export default function TeacherDetailPage() {
             <div className="flex items-center gap-2">
               {/* Tab switcher */}
               <div className="hidden sm:flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
-                {[['info', 'Profile'], ['documents', 'Documents']].map(([tab, label]) => (
+                {[['info', 'Profile'], ['metrics', 'Metrics'], ['documents', 'Documents']].map(([tab, label]) => (
                   <button key={tab} onClick={() => setActiveTab(tab)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                       activeTab === tab
@@ -312,7 +454,7 @@ export default function TeacherDetailPage() {
           </div>
           {/* Mobile tab switcher */}
           <div className="flex sm:hidden gap-1 pb-2">
-            {[['info', 'Profile'], ['documents', 'Documents']].map(([tab, label]) => (
+            {[['info', 'Profile'], ['metrics', 'Metrics'], ['documents', 'Documents']].map(([tab, label]) => (
               <button key={tab} onClick={() => setActiveTab(tab)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   activeTab === tab
@@ -332,6 +474,10 @@ export default function TeacherDetailPage() {
         ) : activeTab === 'documents' ? (
           <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-4xl mx-auto">
             <DocumentsTab teacherId={id} />
+          </div>
+        ) : activeTab === 'metrics' ? (
+          <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-5xl mx-auto">
+            <MetricsTab teacherId={id} />
           </div>
         ) : (
           <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-5 max-w-6xl mx-auto">

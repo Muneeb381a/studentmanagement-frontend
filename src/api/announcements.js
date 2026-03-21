@@ -18,3 +18,6 @@ export const deleteAnnouncement     = (id)          => api.delete(`/announcement
 // ── Read tracking ──────────────────────────────────────────
 export const markAnnouncementRead   = (id, data)    => api.post(`/announcements/${id}/read`, data);
 export const getAnnouncementReads   = (id)          => api.get(`/announcements/${id}/reads`);
+
+// ── Email broadcast ────────────────────────────────────────
+export const sendAnnouncementEmail  = (id)          => api.post(`/announcements/${id}/send-email`);

@@ -20,10 +20,10 @@ import { GRADES } from '../constants';
 
 const BLANK = {
   full_name: '', full_name_urdu: '', date_of_birth: '', place_of_birth: '',
-  gender: '', religion: '', nationality: 'Pakistani', b_form_no: '', blood_group: '',
+  gender: '', nationality: 'Pakistani', b_form_no: '', blood_group: '',
   phone: '', email: '', emergency_contact: '',
   address: '', city: '', province: '', postal_code: '',
-  class_id: '', grade: '', section: '', roll_number: '',
+  class_id: '', grade: '',
   admission_date: '', status: 'active',
   previous_school: '', previous_class: '', previous_marks: '',
   father_name: '', father_cnic: '', father_phone: '', father_email: '',
@@ -367,7 +367,6 @@ export default function AdmissionPage() {
           date_of_birth:      s.date_of_birth?.split('T')[0]   || '',
           place_of_birth:     s.place_of_birth      || '',
           gender:             s.gender              || '',
-          religion:           s.religion            || '',
           nationality:        s.nationality         || 'Pakistani',
           b_form_no:          s.b_form_no           || '',
           blood_group:        s.blood_group         || '',
@@ -380,8 +379,8 @@ export default function AdmissionPage() {
           postal_code:        s.postal_code         || '',
           class_id:           s.class_id ? String(s.class_id) : '',
           grade:              s.grade               || '',
-          section:            s.section             || '',
-          roll_number:        s.roll_number         || '',
+          _admission_number:  s.admission_number    || '',
+          _roll_number:       s.roll_number         || '',
           admission_date:     s.admission_date?.split('T')[0] || '',
           status:             s.status              || 'active',
           previous_school:    s.previous_school     || '',
@@ -445,8 +444,10 @@ export default function AdmissionPage() {
     }
     setSaving(true);
     try {
+      // Strip display-only fields (prefixed with _) before sending
+      const { _admission_number, _roll_number, ...rest } = form;
       const payload = {
-        ...form,
+        ...rest,
         class_id:           form.class_id ? Number(form.class_id) : null,
         transport_required: Boolean(form.transport_required),
         hostel_required:    Boolean(form.hostel_required),
@@ -518,9 +519,8 @@ export default function AdmissionPage() {
       </div>
 
       <SectionHead label="National Identity" />
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input label="B-Form / CNIC No." name="b_form_no" value={form.b_form_no} onChange={onChange} placeholder="12345-6789012-3" />
-        <Input label="Religion" name="religion" value={form.religion} onChange={onChange} placeholder="e.g. Islam" />
         <Input label="Nationality" name="nationality" value={form.nationality} onChange={onChange} placeholder="Pakistani" />
       </div>
     </div>
@@ -552,6 +552,28 @@ export default function AdmissionPage() {
     3: (
       <div className="space-y-4">
         <SectionHead label="Current Enrollment" />
+
+        {/* Read-only auto-generated numbers (edit mode only) */}
+        {isEdit && (
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: 'Admission No.', value: form._admission_number },
+              { label: 'Roll No.',      value: form._roll_number },
+            ].map(({ label, value }) => (
+              <div key={label} className="rounded-xl border border-indigo-100 dark:border-indigo-800/50 bg-indigo-50/60 dark:bg-indigo-900/10 px-4 py-3">
+                <p className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-wider mb-0.5">{label}</p>
+                <p className="text-sm font-bold text-indigo-700 dark:text-indigo-300 font-mono">{value || '—'}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!isEdit && (
+          <div className="px-3 py-2.5 rounded-xl bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800/40 text-xs text-sky-700 dark:text-sky-400">
+            Admission number and roll number will be assigned automatically upon enrollment.
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Select label="Assign Class" name="class_id" value={form.class_id} onChange={onChange}>
             <option value="">— No class assigned —</option>
@@ -561,8 +583,6 @@ export default function AdmissionPage() {
             <option value="">Select grade</option>
             {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
           </Select>
-          <Input label="Section" name="section" value={form.section} onChange={onChange} placeholder="e.g. A, B, C" />
-          <Input label="Roll Number" name="roll_number" value={form.roll_number} onChange={onChange} placeholder="e.g. 2024-001" />
           <Input label="Admission Date" name="admission_date" type="date" value={form.admission_date} onChange={onChange} />
           <Select label="Enrollment Status" name="status" value={form.status} onChange={onChange}>
             <option value="active">Active</option>

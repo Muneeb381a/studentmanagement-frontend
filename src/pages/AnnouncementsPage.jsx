@@ -4,7 +4,7 @@ import {
   Bell, Plus, Pencil, Trash2, X, Check, Search, Filter,
   Megaphone, Calendar, Users, BookOpen, Banknote, PartyPopper,
   Palmtree, AlertTriangle, Eye, EyeOff, Clock, ChevronDown,
-  ToggleLeft, ToggleRight, History,
+  ToggleLeft, ToggleRight, History, Mail, Loader2,
 } from 'lucide-react';
 import Layout   from '../components/layout/Layout';
 import Modal    from '../components/ui/Modal';
@@ -14,7 +14,7 @@ import { Textarea, Select } from '../components/ui/Input';
 import Spinner  from '../components/ui/Spinner';
 import {
   getAnnouncements, createAnnouncement, updateAnnouncement,
-  toggleAnnouncement, deleteAnnouncement,
+  toggleAnnouncement, deleteAnnouncement, sendAnnouncementEmail,
 } from '../api/announcements';
 import { getClasses } from '../api/classes';
 
@@ -284,6 +284,7 @@ function ManageTab() {
   const [showAll,    setShowAll]    = useState(false);   // false = active only
   const [modalOpen,  setModalOpen]  = useState(false);
   const [editing,    setEditing]    = useState(null);
+  const [sending,    setSending]    = useState(null);    // id of announcement being emailed
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -322,6 +323,20 @@ function ManageTab() {
       load();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Delete failed');
+    }
+  };
+
+  const handleSendEmail = async (id, title) => {
+    if (!window.confirm(`Send email broadcast for "${title}" to all recipients in its target audience?`)) return;
+    setSending(id);
+    try {
+      const { data } = await sendAnnouncementEmail(id);
+      toast.success(`Email sent to ${data.emailsSent} recipient(s)${data.skipped ? ` (${data.skipped} skipped)` : ''}`);
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to send email');
+    } finally {
+      setSending(null);
     }
   };
 
@@ -367,7 +382,7 @@ function ManageTab() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60">
-                {['Title', 'Type', 'Audience', 'Priority', 'Expires', 'Status', 'Actions'].map(h => (
+                {['Title', 'Type', 'Audience', 'Priority', 'Expires', 'Status', 'Email', 'Actions'].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -428,6 +443,27 @@ function ManageTab() {
                         ].join(' ')}>
                         {item.is_active ? <><ToggleRight size={10} /> Active</> : <><ToggleLeft size={10} /> Inactive</>}
                       </button>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {item.email_sent_at ? (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                            <Check size={9} /> Sent
+                          </span>
+                          <span className="text-[10px] text-slate-400">{item.email_sent_count} recipient(s)</span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleSendEmail(item.id, item.title)}
+                          disabled={sending === item.id}
+                          title="Send email to target audience"
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400 dark:border-indigo-800/40 transition-colors disabled:opacity-50">
+                          {sending === item.id
+                            ? <Loader2 size={10} className="animate-spin" />
+                            : <Mail size={10} />}
+                          {sending === item.id ? 'Sending…' : 'Send Email'}
+                        </button>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">

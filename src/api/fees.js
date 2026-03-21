@@ -62,3 +62,6 @@ export const importFeePayments = (formData) =>
 
 export const exportFeesExcel = (params = {}) =>
   api.get('/fees/export', { params: { ...params, format: 'xlsx' }, responseType: 'blob' });
+
+// Fee reminders (email + SMS broadcast)
+export const sendFeeReminders = (data = {}) => api.post('/fees/send-reminders', data);

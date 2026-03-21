@@ -4,7 +4,7 @@ import {
   Clock3, ChevronDown, Search, Plus, Pencil, Trash2, Save, X,
   Download, RefreshCw, Eye, CreditCard, Layers, ReceiptText,
   Settings2, BarChart3, CalendarDays, Users, Printer, FileText,
-  Tag, Zap, MessageSquare, Copy, Check, Send,
+  Tag, Zap, MessageSquare, Copy, Check, Send, Mail, Loader2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { downloadBlob } from '../utils';
@@ -18,6 +18,7 @@ import {
   updateInvoice, cancelInvoice, recordPayment, bulkRecordPayments, getMonthlySummary,
   getOutstandingBalances, getDashboardStats, getExportURL,
   getConcessions, saveConcession, deleteConcession, applyLateFees,
+  sendFeeReminders,
 } from '../api/fees';
 import { getSettings } from '../api/settings';
 
@@ -2024,16 +2025,30 @@ function ReportsTab({ classes }) {
 
 // ── Main Page ─────────────────────────────────────────────────
 export default function FeesPage() {
-  const [tab,      setTab]     = useState('invoices');
-  const [classes,  setClasses] = useState([]);
-  const [feeHeads, setFeeHeads]= useState([]);
-  const [stats,    setStats]   = useState(null);
+  const [tab,              setTab]             = useState('invoices');
+  const [classes,          setClasses]         = useState([]);
+  const [feeHeads,         setFeeHeads]        = useState([]);
+  const [stats,            setStats]           = useState(null);
+  const [sendingReminders, setSendingReminders]= useState(false);
 
   useEffect(() => {
     getClasses().then(r => setClasses(Array.isArray(r.data) ? r.data : [])).catch(() => {});
     getFeeHeads().then(r => setFeeHeads(Array.isArray(r.data) ? r.data : [])).catch(() => {});
     getDashboardStats().then(r => setStats(r.data?.data ?? r.data)).catch(() => {});
   }, []);
+
+  const handleSendReminders = async () => {
+    if (!window.confirm('Send fee reminders (email + SMS) to all parents with overdue or due-soon invoices?\n\nEach invoice will only be reminded once per day.')) return;
+    setSendingReminders(true);
+    try {
+      const { data } = await sendFeeReminders({ channel: 'both', status: 'both' });
+      toast.success(`Reminders sent — ${data.emailsSent} email(s), ${data.smsSent} SMS (${data.skipped} skipped)`);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to send reminders');
+    } finally {
+      setSendingReminders(false);
+    }
+  };
 
   const TABS = [
     { key: 'invoices',    label: 'Invoices',     icon: ReceiptText  },
@@ -2076,6 +2091,18 @@ export default function FeesPage() {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Send Reminders */}
+          <div className="flex items-center gap-2 mb-3">
+            <button
+              onClick={handleSendReminders}
+              disabled={sendingReminders}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/15 hover:bg-white/25 border border-white/20 text-white transition-all disabled:opacity-50 backdrop-blur-sm">
+              {sendingReminders
+                ? <><Loader2 size={12} className="animate-spin" /> Sending…</>
+                : <><Mail size={12} /> Send Fee Reminders</>}
+            </button>
           </div>
 
           {/* Tab bar */}

@@ -8,6 +8,7 @@ import {
   ArrowUpRight, ArrowDownRight, Download, Upload,
 } from 'lucide-react';
 import Layout   from '../components/layout/Layout';
+import { downloadBlob } from '../utils';
 import {
   getCategories, createCategory, updateCategory,
   getExpenses, createExpense, updateExpense, deleteExpense,
@@ -700,10 +701,16 @@ export default function ExpensesPage() {
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
                   <Upload size={13} /> Import
                 </button>
-                <a href={exportExpenses({ format: 'xlsx' })}
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await exportExpenses({ format: 'xlsx' });
+                      downloadBlob(res.data, 'expenses.xlsx');
+                    } catch { toast.error('Export failed'); }
+                  }}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
                   <Download size={13} /> Export Excel
-                </a>
+                </button>
                 <button onClick={exportCSV}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
                   <Download size={13} /> Export CSV

@@ -13,7 +13,5 @@ export const getInventoryImportTemplate = () =>
 export const importInventory = (formData) =>
   api.post('/inventory/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 
-export const exportInventory = (params = {}) => {
-  const base = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-  return `${base}/inventory/export?${new URLSearchParams(params)}`;
-};
+export const exportInventory = (params = {}) =>
+  api.get('/inventory/export', { params, responseType: 'blob' });

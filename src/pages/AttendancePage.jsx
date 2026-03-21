@@ -8,6 +8,7 @@ import {
   UserCheck, UserX,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { downloadBlob } from '../utils';
 import Layout from '../components/layout/Layout';
 import { getClasses } from '../api/classes';
 import { getPeriods } from '../api/timetable';
@@ -707,9 +708,11 @@ function ReportsTab({ classes }) {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleExport = () => {
-    const url = getExportURL({ entity_type: mode, month, ...(mode === 'student' && classId ? { class_id: classId } : {}) });
-    window.open(url, '_blank');
+  const handleExport = async () => {
+    try {
+      const res = await getExportURL({ entity_type: mode, month, ...(mode === 'student' && classId ? { class_id: classId } : {}) });
+      downloadBlob(res.data, `attendance_${mode}_${month || 'all'}.xlsx`);
+    } catch { toast.error('Export failed'); }
   };
 
   const cycleSort = (key) => setSort(s => s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' });

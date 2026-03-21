@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
+import { downloadBlob } from '../utils';
 import {
   Package, Plus, Pencil, Trash2, Search, X, AlertTriangle,
   BoxSelect, Wrench, FlaskConical, Printer, BookOpen, Dumbbell,
@@ -237,12 +238,17 @@ export default function InventoryPage() {
               >
                 <Upload size={14} /> Import
               </button>
-              <a
-                href={exportInventory({ format: 'xlsx' })}
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await exportInventory({ format: 'xlsx' });
+                    downloadBlob(res.data, 'inventory.xlsx');
+                  } catch { toast.error('Export failed'); }
+                }}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
               >
                 <Download size={14} /> Export
-              </a>
+              </button>
               <Button onClick={() => setModal('add')} style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
                 <Plus size={14} /> Add Item
               </Button>

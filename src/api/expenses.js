@@ -25,7 +25,5 @@ export const getExpenseImportTemplate = () =>
 export const importExpenses = (formData) =>
   api.post('/expenses/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 
-export const exportExpenses = (params = {}) => {
-  const base = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-  return `${base}/expenses/export?${new URLSearchParams(params)}`;
-};
+export const exportExpenses = (params = {}) =>
+  api.get('/expenses/export', { params, responseType: 'blob' });

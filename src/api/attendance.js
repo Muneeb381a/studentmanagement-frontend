@@ -19,12 +19,9 @@ export const deleteAttendance = (id)       => api.delete(`/attendance/${id}`);
 export const getMonthlySummary = (params) => api.get('/attendance/monthly',       { params });
 export const getDailySummary   = (params) => api.get('/attendance/daily-summary', { params });
 
-// Export — returns a URL to open in new tab
-export const getExportURL = (params) => {
-  const base = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-  const qs   = new URLSearchParams(params).toString();
-  return `${base}/attendance/export?${qs}`;
-};
+// Export — returns blob via authenticated axios request
+export const getExportURL = (params) =>
+  api.get('/attendance/export', { params, responseType: 'blob' });
 
 // History
 export const getStudentHistory = (studentId, month) =>

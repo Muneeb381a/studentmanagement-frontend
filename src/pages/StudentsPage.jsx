@@ -14,7 +14,7 @@ import Button from '../components/ui/Button';
 import { getStudents, deleteStudent, resetStudentCredentials, promoteStudents, getStudentImportTemplate, importStudents, exportStudents } from '../api/students';
 import { getClasses } from '../api/classes';
 import { useDebounce } from '../hooks/useDebounce';
-import { formatDate, toPct } from '../utils';
+import { formatDate, toPct, downloadBlob } from '../utils';
 
 /* ── Promote Modal ── */
 function PromoteModal({ classes, onClose, onDone }) {
@@ -201,12 +201,17 @@ export default function StudentsPage() {
               >
                 <Upload size={14} /> Import
               </button>
-              <a
-                href={exportStudents({ format: 'xlsx' })}
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await exportStudents({ format: 'xlsx' });
+                    downloadBlob(res.data, 'students.xlsx');
+                  } catch { toast.error('Export failed'); }
+                }}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-white text-sm font-semibold transition-all border border-white/30"
               >
                 <Download size={14} /> Export
-              </a>
+              </button>
               <Button
                 onClick={() => navigate('/admission/new')}
                 className="self-start sm:self-auto bg-white! text-indigo-700 hover:bg-indigo-50!"

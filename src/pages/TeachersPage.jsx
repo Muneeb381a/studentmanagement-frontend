@@ -14,7 +14,7 @@ import Avatar from '../components/ui/Avatar';
 import EmptyState from '../components/ui/EmptyState';
 import TeacherFormModal from '../components/TeacherFormModal';
 import { getTeachers, createTeacher, updateTeacher, deleteTeacher, getTeacherImportTemplate, importTeachers, exportTeachers } from '../api/teachers';
-import { toPct, formatDate } from '../utils';
+import { toPct, formatDate, downloadBlob } from '../utils';
 import { TEACHER_STATUS_STYLES } from '../constants';
 
 /* ── Teacher card ── */
@@ -196,12 +196,17 @@ export default function TeachersPage() {
               >
                 <Upload size={14} /> Import
               </button>
-              <a
-                href={exportTeachers({ format: 'xlsx' })}
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await exportTeachers({ format: 'xlsx' });
+                    downloadBlob(res.data, 'teachers.xlsx');
+                  } catch { toast.error('Export failed'); }
+                }}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-white text-sm font-semibold transition-all border border-white/30"
               >
                 <Download size={14} /> Export
-              </a>
+              </button>
               <button
                 onClick={() => { setEditTarget(null); setModalOpen(true); }}
                 className="flex items-center gap-2 px-5 py-2.5 bg-white text-emerald-700 text-sm font-bold rounded-xl shadow-lg hover:bg-emerald-50 transition-all hover:scale-105"

@@ -40,10 +40,8 @@ export const getStudentImportTemplate = () =>
 export const importStudents = (formData) =>
   api.post('/students/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 
-export const exportStudents = (params = {}) => {
-  const base = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-  return `${base}/students/export?${new URLSearchParams(params)}`;
-};
+export const exportStudents = (params = {}) =>
+  api.get('/students/export', { params, responseType: 'blob' });
 
 // Soft-delete / restore
 export const getDeletedStudents = () => api.get('/students/deleted');

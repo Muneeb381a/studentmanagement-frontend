@@ -32,10 +32,8 @@ export const getOutstandingBalances = (p)  => api.get('/fees/reports/outstanding
 export const getStudentFeeHistory   = (id) => api.get(`/fees/reports/student/${id}`);
 export const getDashboardStats      = ()   => api.get('/fees/dashboard-stats');
 
-export const getExportURL = (params) => {
-  const base = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-  return `${base}/fees/export?${new URLSearchParams(params)}`;
-};
+export const getExportURL = (params = {}) =>
+  api.get('/fees/export', { params, responseType: 'blob' });
 
 // Print data
 export const getInvoicePrint   = (id)        => api.get(`/fees/invoices/${id}/print`);
@@ -62,7 +60,5 @@ export const getFeePaymentImportTemplate = () =>
 export const importFeePayments = (formData) =>
   api.post('/fees/payments/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 
-export const exportFeesExcel = (params = {}) => {
-  const base = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-  return `${base}/fees/export?${new URLSearchParams({ ...params, format: 'xlsx' })}`;
-};
+export const exportFeesExcel = (params = {}) =>
+  api.get('/fees/export', { params: { ...params, format: 'xlsx' }, responseType: 'blob' });

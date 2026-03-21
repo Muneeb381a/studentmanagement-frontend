@@ -7,6 +7,7 @@ import {
   Tag, Zap, MessageSquare, Copy, Check, Send,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { downloadBlob } from '../utils';
 import Layout from '../components/layout/Layout';
 import { getClasses } from '../api/classes';
 import { getStudents } from '../api/students';
@@ -872,12 +873,17 @@ function InvoicesTab({ classes, feeHeads }) {
 
   useEffect(() => { load(); }, [load]);
 
-  const exportUrl = getExportURL({
-    ...(filterMonth  ? { billing_month: filterMonth } : {}),
-    ...(filterClass  ? { class_id: filterClass } : {}),
-    ...(filterStatus ? { status: filterStatus } : {}),
-    ...(filterType   ? { invoice_type: filterType } : {}),
-  });
+  const handleExportInvoices = async () => {
+    try {
+      const res = await getExportURL({
+        ...(filterMonth  ? { billing_month: filterMonth } : {}),
+        ...(filterClass  ? { class_id: filterClass } : {}),
+        ...(filterStatus ? { status: filterStatus } : {}),
+        ...(filterType   ? { invoice_type: filterType } : {}),
+      });
+      downloadBlob(res.data, `fees_invoices_${filterMonth || 'all'}.csv`);
+    } catch { toast.error('Export failed'); }
+  };
 
   const totals = useMemo(() => invoices.reduce((a, r) => ({
     billed:    a.billed    + parseFloat(r.net_amount  || r.total_amount || 0),
@@ -950,11 +956,12 @@ function InvoicesTab({ classes, feeHeads }) {
             <button onClick={load} className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800">
               <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
             </button>
-            <a href={exportUrl} target="_blank" rel="noreferrer"
+            <button
+              onClick={handleExportInvoices}
               className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-white text-sm font-medium shadow-md"
               style={{ background: 'linear-gradient(135deg,#10b981,#14b8a6)' }}>
               <Download size={14} /> Export
-            </a>
+            </button>
             <button
               onClick={() => {
                 const p = new URLSearchParams();
@@ -1847,7 +1854,12 @@ function ReportsTab({ classes }) {
 
   useEffect(() => { load(); }, [load]);
 
-  const exportUrl = getExportURL({ billing_month: monthFrom, ...(classId ? { class_id: classId } : {}) });
+  const handleExportSummary = async () => {
+    try {
+      const res = await getExportURL({ billing_month: monthFrom, ...(classId ? { class_id: classId } : {}) });
+      downloadBlob(res.data, `fees_summary_${monthFrom || 'all'}.csv`);
+    } catch { toast.error('Export failed'); }
+  };
 
   const totalBilled    = summary.reduce((a, r) => a + parseFloat(r.total_billed    || 0), 0);
   const totalCollected = summary.reduce((a, r) => a + parseFloat(r.total_collected || 0), 0);
@@ -1876,11 +1888,12 @@ function ReportsTab({ classes }) {
             <button onClick={load} className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800">
               <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
             </button>
-            <a href={exportUrl} target="_blank" rel="noreferrer"
+            <button
+              onClick={handleExportSummary}
               className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-white text-sm font-medium shadow-md"
               style={{ background: 'linear-gradient(135deg,#10b981,#14b8a6)' }}>
               <Download size={14} /> Export CSV
-            </a>
+            </button>
           </div>
         </div>
       </div>

@@ -42,10 +42,8 @@ export const getTeacherImportTemplate = () =>
 export const importTeachers = (formData) =>
   api.post('/teachers/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 
-export const exportTeachers = (params = {}) => {
-  const base = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-  return `${base}/teachers/export?${new URLSearchParams(params)}`;
-};
+export const exportTeachers = (params = {}) =>
+  api.get('/teachers/export', { params, responseType: 'blob' });
 
 // Soft-delete / restore
 export const getDeletedTeachers = () => api.get('/teachers/deleted');

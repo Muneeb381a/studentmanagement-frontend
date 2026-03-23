@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Printer, ArrowLeft, AlertCircle } from 'lucide-react';
 import { getChallanPrint } from '../api/fees';
 
@@ -284,12 +284,20 @@ function ChallanCopy({ inv, items, settings, copyMeta }) {
 }
 
 // ── Main Page ─────────────────────────────────────────────────
+const COPY_OPTIONS = [
+  { id: '3', label: '3 Copies', copies: [0, 1, 2] },
+  { id: '2', label: '2 Copies', copies: [1, 2] },   // School + Parent
+  { id: '1', label: '1 Copy',   copies: [1] },       // School only
+];
+
 export default function FeeChallanPrint() {
   const { id }     = useParams();
   const navigate   = useNavigate();
+  const [searchParams]        = useSearchParams();
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
+  const [copies, setCopies]   = useState(searchParams.get('copies') || '3');
 
   useEffect(() => {
     const style = document.createElement('style');
@@ -353,6 +361,21 @@ export default function FeeChallanPrint() {
             {challanNo(inv.invoice_no)} — {inv.student_name}
           </span>
         </div>
+        {/* Copies selector */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#f1f5f9', borderRadius: '8px', padding: '3px' }}>
+          <span style={{ fontSize: '11px', color: '#64748b', padding: '0 4px' }}>Copies:</span>
+          {COPY_OPTIONS.map(opt => (
+            <button key={opt.id} onClick={() => setCopies(opt.id)}
+              style={{
+                padding: '4px 10px', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                fontSize: '11px', fontWeight: '600',
+                background: copies === opt.id ? '#6366f1' : 'transparent',
+                color: copies === opt.id ? 'white' : '#475569',
+              }}>
+              {opt.label}
+            </button>
+          ))}
+        </div>
         <button
           onClick={() => window.print()}
           style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 16px', borderRadius: '8px', background: '#6366f1', color: 'white', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}
@@ -361,12 +384,12 @@ export default function FeeChallanPrint() {
         </button>
       </div>
 
-      {/* Three copies */}
+      {/* Challan copies */}
       <div style={{ maxWidth: '780px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '0' }}>
-        {COPY_LABELS.map((copyMeta, idx) => (
+        {(COPY_OPTIONS.find(o => o.id === copies)?.copies || [0, 1, 2]).map((idx, pos, arr) => (
           <div key={idx}>
-            <ChallanCopy inv={inv} items={items} settings={settings} copyMeta={copyMeta} />
-            {idx < COPY_LABELS.length - 1 && (
+            <ChallanCopy inv={inv} items={items} settings={settings} copyMeta={COPY_LABELS[idx]} />
+            {pos < arr.length - 1 && (
               <div
                 className="cut-line"
                 style={{

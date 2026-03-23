@@ -65,3 +65,6 @@ export const exportFeesExcel = (params = {}) =>
 
 // Fee reminders (email + SMS broadcast)
 export const sendFeeReminders = (data = {}) => api.post('/fees/send-reminders', data);
+
+// Student fee account (full ledger — student info + invoices + payments + concessions)
+export const getStudentFeeAccount = (id) => api.get(`/fees/reports/student/${id}`);

@@ -54,6 +54,10 @@ api.interceptors.response.use(
     // Unwrap { success: true, data: [...] } so callers get the array directly
     const d = response.data;
     if (d && typeof d === 'object' && !Array.isArray(d) && Array.isArray(d.data)) {
+      // Preserve pagination metadata before overwriting response.data
+      response.total  = d.total;
+      response.limit  = d.limit;
+      response.offset = d.offset;
       response.data = d.data;
     }
     return response;

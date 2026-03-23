@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Plus, BookOpen, Clock, CheckCircle, AlertCircle, Pencil, Trash2, X, Calendar } from 'lucide-react';
+import { Plus, BookOpen, Clock, CheckCircle, AlertCircle, Pencil, Trash2, X, Calendar, Eye, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Layout from '../components/layout/Layout';
 import { StatCard } from '../components/ui/Card';
@@ -9,6 +9,7 @@ import EmptyState from '../components/ui/EmptyState';
 import { getHomework, createHomework, updateHomework, deleteHomework } from '../api/homework';
 import { getClasses } from '../api/classes';
 import { getSubjects } from '../api/subjects';
+import { getSubmissions, initSubmissions, checkSubmission } from '../api/homeworkSubmissions';
 
 const STATUS_COLORS = {
   active:    'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800/40',
@@ -116,6 +117,131 @@ function HwModal({ hw, classes, subjects, onClose, onSaved }) {
   );
 }
 
+const SUB_STATUS = {
+  pending:   { cls: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',       label: 'Pending' },
+  submitted: { cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',        label: 'Submitted' },
+  checked:   { cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', label: 'Checked' },
+  missing:   { cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',            label: 'Missing' },
+};
+
+function SubmissionsModal({ hw, onClose }) {
+  const [subs, setSubs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [checkingId, setCheckingId] = useState(null);
+  const [checkForm, setCheckForm] = useState({ marks_awarded: '', feedback: '' });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await getSubmissions(hw.id);
+      const d = r.data?.data ?? r.data ?? [];
+      setSubs(Array.isArray(d) ? d : []);
+    } catch { toast.error('Failed to load submissions'); }
+    finally { setLoading(false); }
+  }, [hw.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleInit = async () => {
+    try {
+      await initSubmissions(hw.id);
+      toast.success('Submissions initialised');
+      load();
+    } catch (err) { toast.error(err.response?.data?.message || 'Init failed'); }
+  };
+
+  const handleCheck = async (subId) => {
+    try {
+      await checkSubmission(hw.id, subId, {
+        marks_awarded: checkForm.marks_awarded !== '' ? Number(checkForm.marks_awarded) : null,
+        feedback: checkForm.feedback,
+      });
+      toast.success('Submission checked');
+      setCheckingId(null);
+      setCheckForm({ marks_awarded: '', feedback: '' });
+      load();
+    } catch { toast.error('Check failed'); }
+  };
+
+  const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-PK', { day: 'numeric', month: 'short' }) : '—';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200/80 dark:border-slate-800 max-h-[90vh] flex flex-col">
+        <div className="sticky top-0 bg-white dark:bg-slate-900 z-10 flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+          <div>
+            <h2 className="font-bold text-slate-800 dark:text-slate-100">Submissions: {hw.title}</h2>
+            <p className="text-xs text-slate-400 mt-0.5">{subs.length} students</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={handleInit}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800">
+              <Users size={12} /> Init Submissions
+            </button>
+            <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X size={16} /></button>
+          </div>
+        </div>
+
+        <div className="overflow-y-auto flex-1">
+          {loading ? (
+            <div className="flex justify-center py-10"><div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /></div>
+          ) : subs.length === 0 ? (
+            <div className="py-10 text-center">
+              <Users size={32} className="mx-auto text-slate-200 dark:text-slate-700 mb-2" />
+              <p className="text-sm text-slate-400">No submissions yet. Click "Init Submissions" to create pending rows.</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-50 dark:divide-slate-800/60">
+              {subs.map(sub => {
+                const badgeCfg = SUB_STATUS[sub.status] ?? SUB_STATUS.pending;
+                return (
+                  <div key={sub.id} className="px-5 py-3.5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold text-xs shrink-0">
+                        {(sub.student_name || 'S')[0]}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{sub.student_name || '—'}</p>
+                        {sub.submitted_at && <p className="text-xs text-slate-400">Submitted: {fmtDate(sub.submitted_at)}</p>}
+                      </div>
+                      <span className={`text-xs px-2.5 py-1 rounded-full font-semibold shrink-0 ${badgeCfg.cls}`}>{badgeCfg.label}</span>
+                      {sub.marks_awarded !== null && sub.marks_awarded !== undefined && (
+                        <span className="text-xs font-bold text-slate-600 dark:text-slate-300 shrink-0">{sub.marks_awarded} marks</span>
+                      )}
+                      {sub.status === 'submitted' && (
+                        <button onClick={() => { setCheckingId(sub.id); setCheckForm({ marks_awarded: '', feedback: '' }); }}
+                          className="px-2.5 py-1.5 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium hover:bg-blue-200 transition-colors shrink-0">
+                          Check
+                        </button>
+                      )}
+                    </div>
+                    {checkingId === sub.id && (
+                      <div className="mt-3 ml-11 flex gap-2 items-center flex-wrap">
+                        <input type="number" min="0" placeholder="Marks" value={checkForm.marks_awarded}
+                          onChange={e => setCheckForm(f => ({ ...f, marks_awarded: e.target.value }))}
+                          className="w-24 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300 focus:outline-none" />
+                        <input placeholder="Feedback" value={checkForm.feedback}
+                          onChange={e => setCheckForm(f => ({ ...f, feedback: e.target.value }))}
+                          className="flex-1 min-w-[140px] px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300 focus:outline-none" />
+                        <button onClick={() => handleCheck(sub.id)}
+                          className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700">Save</button>
+                        <button onClick={() => setCheckingId(null)} className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
+                      </div>
+                    )}
+                    {sub.feedback && (
+                      <p className="text-xs text-slate-400 mt-1 ml-11 italic">"{sub.feedback}"</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function HomeworkPage() {
   const [items,       setItems]       = useState([]);
   const [classes,     setClasses]     = useState([]);
@@ -125,6 +251,7 @@ export default function HomeworkPage() {
   const [statusFilt,  setStatusFilt]  = useState('active');
   const [modal,       setModal]       = useState(null); // null | 'new' | hw object
   const [delTarget,   setDelTarget]   = useState(null);
+  const [subsModal,   setSubsModal]   = useState(null); // hw object
 
   const fetchHw = useCallback(async () => {
     setLoading(true);
@@ -245,6 +372,10 @@ export default function HomeworkPage() {
                         {h.description && <p className="text-xs text-slate-400 dark:text-slate-600 mt-1 line-clamp-2">{h.description}</p>}
                       </div>
                       <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-all mt-0.5">
+                        <button onClick={() => setSubsModal(h)} title="View Submissions"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all">
+                          <Eye size={13} />
+                        </button>
                         <button onClick={() => setModal(h)} className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all">
                           <Pencil size={13} />
                         </button>
@@ -269,6 +400,9 @@ export default function HomeworkPage() {
           onClose={() => setModal(null)}
           onSaved={fetchHw}
         />
+      )}
+      {subsModal && (
+        <SubmissionsModal hw={subsModal} onClose={() => setSubsModal(null)} />
       )}
       <ConfirmDialog
         isOpen={Boolean(delTarget)}

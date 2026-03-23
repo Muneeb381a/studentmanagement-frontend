@@ -4,7 +4,7 @@ import {
   Clock3, ChevronDown, Search, Plus, Pencil, Trash2, Save, X,
   Download, RefreshCw, Eye, CreditCard, Layers, ReceiptText,
   Settings2, BarChart3, CalendarDays, Users, Printer, FileText,
-  Tag, Zap, MessageSquare, Copy, Check, Send, Mail, Loader2,
+  Tag, Zap, MessageSquare, Copy, Check, Send, Mail, Loader2, UserCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { downloadBlob } from '../utils';
@@ -40,6 +40,19 @@ const CAT_COLORS  = {
 };
 const fmt = (n) => Number(n || 0).toLocaleString('en-PK', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const currentMonth = () => new Date().toISOString().slice(0, 7);
+const currentAcademicYear = () => {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1; // 1-12
+  // Academic year starts in April (adjust if school uses different start month)
+  const startYear = m >= 4 ? y : y - 1;
+  return `${String(startYear).slice(-2)}-${String(startYear + 1).slice(-2)}` // e.g. "25-26"
+    .replace(/^(\d{2})-(\d{2})$/, (_, a, b) => `20${a}-${b}`); // "2025-26"
+};
+const ACADEMIC_YEARS = (() => {
+  const base = new Date().getFullYear();
+  return [base - 2, base - 1, base, base + 1].map(y => `${y}-${String(y + 1).slice(-2)}`);
+})();
 
 function StatusBadge({ status }) {
   const c = STATUS_CONFIG[status] || STATUS_CONFIG.unpaid;
@@ -856,11 +869,15 @@ function InvoicesTab({ classes, feeHeads }) {
   const [selectedIds,  setSelectedIds]  = useState(new Set());
   const [bulkModal,    setBulkModal]    = useState(false);
   const [whatsAppInv,  setWhatsAppInv]  = useState(null);
+  const [page,         setPage]         = useState(0);
+  const [totalCount,   setTotalCount]   = useState(0);
+  const PAGE_SIZE = 50;
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (pageOverride) => {
     setLoading(true);
+    const currentPage = pageOverride !== undefined ? pageOverride : page;
     try {
-      const p = { limit: 200 };
+      const p = { limit: PAGE_SIZE, offset: currentPage * PAGE_SIZE };
       if (filterStatus) p.status = filterStatus;
       if (filterClass)  p.class_id = filterClass;
       if (filterMonth)  p.billing_month = filterMonth;
@@ -868,8 +885,21 @@ function InvoicesTab({ classes, feeHeads }) {
       if (search)       p.search = search;
       const res = await getInvoices(p);
       setInvoices(Array.isArray(res.data) ? res.data : []);
+      setTotalCount(res.total ?? res.data?.length ?? 0);
     } catch { toast.error('Failed to load invoices'); }
     finally { setLoading(false); }
+  }, [filterStatus, filterClass, filterMonth, filterType, search, page]);
+
+  // Reset to page 0 when filters change (not when page itself changes)
+  const filtersRef = useRef({ filterStatus, filterClass, filterMonth, filterType, search });
+  useEffect(() => {
+    const prev = filtersRef.current;
+    if (prev.filterStatus !== filterStatus || prev.filterClass !== filterClass ||
+        prev.filterMonth !== filterMonth || prev.filterType !== filterType ||
+        prev.search !== search) {
+      filtersRef.current = { filterStatus, filterClass, filterMonth, filterType, search };
+      setPage(0);
+    }
   }, [filterStatus, filterClass, filterMonth, filterType, search]);
 
   useEffect(() => { load(); }, [load]);
@@ -1010,7 +1040,7 @@ function InvoicesTab({ classes, feeHeads }) {
               </div>
               <div>
                 <div className="text-lg font-bold text-slate-800 dark:text-slate-100">Rs. {fmt(v)}</div>
-                <div className="text-xs text-slate-400">{l} ({invoices.length} invoices)</div>
+                <div className="text-xs text-slate-400">{l} ({totalCount} invoices)</div>
               </div>
             </div>
           ))}
@@ -1107,6 +1137,14 @@ function InvoicesTab({ classes, feeHeads }) {
                               <MessageSquare size={14} />
                             </button>
                           )}
+                          {inv.student_id && (
+                            <button
+                              onClick={() => window.open(`/fees/student/${inv.student_id}`, '_blank')}
+                              title="View Fee Account"
+                              className="p-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 text-slate-400 hover:text-blue-600 transition-colors">
+                              <UserCircle size={14} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1115,6 +1153,27 @@ function InvoicesTab({ classes, feeHeads }) {
               </tbody>
             </table>
           </div>
+          {/* Pagination */}
+          {totalCount > PAGE_SIZE && (
+            <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalCount)} of {totalCount}
+              </span>
+              <div className="flex items-center gap-2">
+                <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300">
+                  ← Prev
+                </button>
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Page {page + 1} / {Math.ceil(totalCount / PAGE_SIZE)}
+                </span>
+                <button disabled={(page + 1) * PAGE_SIZE >= totalCount} onClick={() => setPage(p => p + 1)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300">
+                  Next →
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1153,7 +1212,7 @@ function GenerateTab({ classes }) {
   const [classId,      setClassId]   = useState('');
   const [month,        setMonth]     = useState(currentMonth());
   const [dueDate,      setDueDate]   = useState('');
-  const [year,         setYear]      = useState('2024-25');
+  const [year,         setYear]      = useState(currentAcademicYear);
   // Admission: student search
   const [stuQuery,     setStuQuery]  = useState('');
   const [stuResults,   setStuRes]    = useState([]);
@@ -1234,7 +1293,7 @@ function GenerateTab({ classes }) {
               {classes.map(c => <option key={c.id} value={c.id}>{c.name} ({c.grade})</option>)}
             </Sel>
             <Sel label="Academic Year" value={year} onChange={setYear}>
-              {['2023-24','2024-25','2025-26','2026-27'].map(y => <option key={y} value={y}>{y}</option>)}
+              {ACADEMIC_YEARS.map(y => <option key={y} value={y}>{y}</option>)}
             </Sel>
           </>
         ) : (
@@ -1276,7 +1335,7 @@ function GenerateTab({ classes }) {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <Sel label="Academic Year" value={year} onChange={setYear}>
-                {['2023-24','2024-25','2025-26','2026-27'].map(y => <option key={y} value={y}>{y}</option>)}
+                {ACADEMIC_YEARS.map(y => <option key={y} value={y}>{y}</option>)}
               </Sel>
               <div>
                 <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Due Date</label>
@@ -1658,7 +1717,7 @@ function SetupTab({ classes }) {
   const [heads,      setHeads]      = useState([]);
   const [structures, setStructures] = useState([]);
   const [selClass,   setSelClass]   = useState('');
-  const [selYear,    setSelYear]    = useState('2024-25');
+  const [selYear,    setSelYear]    = useState(currentAcademicYear);
 
   const [headForm,   setHeadForm]   = useState({ name: '', category: 'monthly', description: '' });
   const [structForm, setStructForm] = useState({ fee_head_id: '', amount: '' });
@@ -1783,7 +1842,7 @@ function SetupTab({ classes }) {
               {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </Sel>
             <Sel label="Academic Year" value={selYear} onChange={setSelYear}>
-              {['2023-24','2024-25','2025-26','2026-27'].map(y => <option key={y} value={y}>{y}</option>)}
+              {ACADEMIC_YEARS.map(y => <option key={y} value={y}>{y}</option>)}
             </Sel>
           </div>
 

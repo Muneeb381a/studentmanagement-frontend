@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Banknote, CheckCircle2, NotebookPen, FileBarChart2,
-  AlertTriangle, BookOpen, Calendar, Clock, Star, Zap,
+  AlertTriangle, BookOpen, Calendar, Clock, Star, Zap, FileCheck,
 } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { PageLoader } from '../components/ui/Spinner';
@@ -11,6 +12,7 @@ import { getStudentHistory } from '../api/attendance';
 import { getInvoices } from '../api/fees';
 import { getHomework } from '../api/homework';
 import { getExams } from '../api/exams';
+import api from '../api/axios';
 
 function greeting() {
   const h = new Date().getHours();
@@ -86,6 +88,7 @@ export default function StudentDashboardPage() {
   const [invoices,   setInvoices]   = useState([]);
   const [homework,   setHomework]   = useState([]);
   const [exams,      setExams]      = useState([]);
+  const [quizzes,    setQuizzes]    = useState([]);
   const [loading,    setLoading]    = useState(true);
 
   const thisMonth = new Date().toISOString().slice(0, 7);
@@ -93,18 +96,21 @@ export default function StudentDashboardPage() {
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const [stuRes, attRes, invRes, hwRes, exRes] = await Promise.all([
+        const [stuRes, attRes, invRes, hwRes, exRes, qzRes] = await Promise.all([
           user.entity_id ? getStudent(user.entity_id)                               : Promise.resolve({ data: null }),
           user.entity_id ? getStudentHistory(user.entity_id, thisMonth)             : Promise.resolve({ data: [] }),
           user.entity_id ? getInvoices({ student_id: user.entity_id, limit: 10 })  : Promise.resolve({ data: [] }),
           getHomework({ limit: 8 }),
           getExams({ limit: 6 }),
+          api.get('/quizzes', { params: { status: 'published' } }).catch(() => ({ data: [] })),
         ]);
         setStudent(stuRes.data?.data ?? stuRes.data ?? null);
         setAttendance(Array.isArray(attRes.data) ? attRes.data : []);
         setInvoices(Array.isArray(invRes.data) ? invRes.data : []);
         setHomework(Array.isArray(hwRes.data) ? hwRes.data : []);
         setExams(Array.isArray(exRes.data) ? exRes.data : []);
+        const qzData = qzRes.data?.data ?? qzRes.data ?? [];
+        setQuizzes(Array.isArray(qzData) ? qzData : []);
       } catch { /* silent */ }
       setLoading(false);
     };
@@ -403,7 +409,9 @@ export default function StudentDashboardPage() {
                       : 'bg-red-50 border-red-200 dark:bg-red-900/10 dark:border-red-800'
                   }`}>
                   <div className="flex items-start justify-between mb-2">
-                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate flex-1">{inv.fee_head_name || 'Fee'}</p>
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate flex-1">
+                      {inv.invoice_no || (inv.invoice_type === 'monthly' ? 'Monthly Fee' : inv.invoice_type === 'admission' ? 'Admission Fee' : 'Fee')}
+                    </p>
                     <span className={`text-[10px] font-extrabold ml-2 px-2 py-0.5 rounded-full ${
                       inv.status === 'paid'
                         ? 'bg-emerald-200 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300'
@@ -412,13 +420,62 @@ export default function StudentDashboardPage() {
                         : 'bg-red-200 text-red-800 dark:bg-red-900/50 dark:text-red-300'
                     }`}>{inv.status}</span>
                   </div>
-                  <p className="text-lg font-extrabold text-slate-800 dark:text-white">PKR {PKR(inv.amount)}</p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{inv.month || '—'}</p>
+                  <p className="text-lg font-extrabold text-slate-800 dark:text-white">PKR {PKR(inv.net_amount || inv.total_amount)}</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{inv.billing_month || '—'}</p>
                   {Number(inv.balance) > 0 && (
                     <p className="text-[11px] font-semibold text-red-600 dark:text-red-400 mt-1">
                       Balance: PKR {PKR(inv.balance)}
                     </p>
                   )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── Active Quizzes ── */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
+          <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+            <FileCheck size={16} className="text-indigo-500" />
+            <h2 className="font-bold text-slate-800 dark:text-white text-sm">Active Quizzes</h2>
+            {quizzes.length > 0 && (
+              <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
+                {quizzes.length} available
+              </span>
+            )}
+          </div>
+          {quizzes.length === 0 ? (
+            <div className="px-5 py-10 text-center">
+              <FileCheck size={32} className="mx-auto text-slate-200 dark:text-slate-700 mb-2" />
+              <p className="text-sm text-slate-400">No active quizzes right now</p>
+            </div>
+          ) : (
+            <div className="p-4 space-y-3">
+              {quizzes.slice(0, 5).map(qz => (
+                <div key={qz.id}
+                  className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                    style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+                    <FileCheck size={16} className="text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 dark:text-white truncate">{qz.title}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {qz.subject_name && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">
+                          {qz.subject_name}
+                        </span>
+                      )}
+                      <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                        <Clock size={9} /> {qz.duration_min || '—'} min
+                      </span>
+                    </div>
+                  </div>
+                  <Link to={`/quizzes/${qz.id}/take`}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-white text-xs font-semibold shrink-0"
+                    style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+                    Take Quiz
+                  </Link>
                 </div>
               ))}
             </div>

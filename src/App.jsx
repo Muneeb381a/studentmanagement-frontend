@@ -27,6 +27,7 @@ import FeesPage           from './pages/FeesPage';
 import SubjectsPage       from './pages/SubjectsPage';
 import ExamsPage          from './pages/ExamsPage';
 import ReportCardPrintPage   from './pages/ReportCardPrintPage';
+import PaperPrintPage        from './pages/PaperPrintPage';
 import StudentIdCardPage    from './pages/StudentIdCardPage';
 import CertificatePrintPage from './pages/CertificatePrintPage';
 import AnnouncementsPage  from './pages/AnnouncementsPage';
@@ -55,10 +56,24 @@ import IncomePage               from './pages/IncomePage';
 import LeavePage                from './pages/LeavePage';
 import SetupPage                from './pages/SetupPage';
 import FeeStructurePrintPage    from './pages/FeeStructurePrintPage';
+import StudentFeePage           from './pages/StudentFeePage';
+import FeeMonthlySlipPage       from './pages/FeeMonthlySlipPage';
+import TeacherDetailPrintPage   from './pages/TeacherDetailPrintPage';
 import SyllabusPage             from './pages/SyllabusPage';
 import FinancialAnalyticsPage   from './pages/FinancialAnalyticsPage';
 import AnnualReportPage         from './pages/AnnualReportPage';
 import CustomReportPage         from './pages/CustomReportPage';
+import LateArrivalsPage         from './pages/LateArrivalsPage';
+import MedicalRecordsPage       from './pages/MedicalRecordsPage';
+import CanteenPage              from './pages/CanteenPage';
+import MeetingsPage             from './pages/MeetingsPage';
+import MeetingsPrintPage        from './pages/MeetingsPrintPage';
+import ScholarshipsPage         from './pages/ScholarshipsPage';
+import AlumniPage               from './pages/AlumniPage';
+import RolloverWizardPage       from './pages/RolloverWizardPage';
+import QuizzesPage              from './pages/QuizzesPage';
+import QuizTakePage             from './pages/QuizTakePage';
+import QuizResultsPage          from './pages/QuizResultsPage';
 
 /* Redirect / → role-appropriate home */
 function RoleRedirect() {
@@ -130,6 +145,11 @@ export default function App() {
                 <TeacherDetailPage />
               </ProtectedRoute>
             } />
+            <Route path="/teachers/:id/print" element={
+              <ProtectedRoute roles={['admin']}>
+                <TeacherDetailPrintPage />
+              </ProtectedRoute>
+            } />
             <Route path="/classes" element={
               <ProtectedRoute roles={['admin', 'teacher']}>
                 <ClassesPage />
@@ -190,6 +210,11 @@ export default function App() {
                 <ReportCardPrintPage />
               </ProtectedRoute>
             } />
+            <Route path="/exams/papers/:id/print" element={
+              <ProtectedRoute roles={['admin', 'teacher']}>
+                <PaperPrintPage />
+              </ProtectedRoute>
+            } />
             <Route path="/announcements" element={
               <ProtectedRoute roles={['admin', 'teacher']}>
                 <AnnouncementsPage />
@@ -238,6 +263,16 @@ export default function App() {
             <Route path="/fees/structure/print" element={
               <ProtectedRoute roles={['admin']}>
                 <FeeStructurePrintPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/fees/student/:id" element={
+              <ProtectedRoute roles={['admin']}>
+                <StudentFeePage />
+              </ProtectedRoute>
+            } />
+            <Route path="/fees/monthly-slip/:studentId" element={
+              <ProtectedRoute roles={['admin']}>
+                <FeeMonthlySlipPage />
               </ProtectedRoute>
             } />
             <Route path="/salary" element={
@@ -322,6 +357,18 @@ export default function App() {
                 <CustomReportPage />
               </ProtectedRoute>
             } />
+
+            <Route path="/late-arrivals" element={<ProtectedRoute roles={['admin','teacher']}><LateArrivalsPage /></ProtectedRoute>} />
+            <Route path="/medical" element={<ProtectedRoute roles={['admin','teacher']}><MedicalRecordsPage /></ProtectedRoute>} />
+            <Route path="/canteen" element={<ProtectedRoute roles={['admin']}><CanteenPage /></ProtectedRoute>} />
+            <Route path="/meetings" element={<ProtectedRoute roles={['admin','teacher','parent']}><MeetingsPage /></ProtectedRoute>} />
+            <Route path="/meetings/print" element={<ProtectedRoute roles={['admin','teacher']}><MeetingsPrintPage /></ProtectedRoute>} />
+            <Route path="/scholarships" element={<ProtectedRoute roles={['admin']}><ScholarshipsPage /></ProtectedRoute>} />
+            <Route path="/alumni" element={<ProtectedRoute roles={['admin']}><AlumniPage /></ProtectedRoute>} />
+            <Route path="/rollover" element={<ProtectedRoute roles={['admin']}><RolloverWizardPage /></ProtectedRoute>} />
+            <Route path="/quizzes" element={<ProtectedRoute roles={['admin','teacher']}><QuizzesPage /></ProtectedRoute>} />
+            <Route path="/quizzes/:id/take" element={<ProtectedRoute roles={['student']}><QuizTakePage /></ProtectedRoute>} />
+            <Route path="/quizzes/attempts/:id/results" element={<ProtectedRoute roles={['admin','teacher','student']}><QuizResultsPage /></ProtectedRoute>} />
 
             <Route path="*" element={<NotFoundPage />} />
           </Routes>

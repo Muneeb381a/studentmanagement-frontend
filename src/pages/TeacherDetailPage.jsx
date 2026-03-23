@@ -4,7 +4,8 @@ import {
   ArrowLeft, GraduationCap, Mail, Phone, BookOpen,
   Users, Calendar, Award, MapPin, Pencil, Eye,
   Camera, FileText, Trash2, Upload, ExternalLink,
-  BarChart3, RefreshCw,
+  BarChart3, RefreshCw, KeyRound, Copy, Check, Printer,
+  ShieldCheck, AlertTriangle, Loader2, User,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -22,10 +23,125 @@ import TeacherFormModal from '../components/TeacherFormModal';
 import {
   getTeacher, getTeacherClasses, getTeacherStudents, updateTeacher,
   uploadTeacherPhoto, getTeacherDocuments, uploadTeacherDocument, deleteTeacherDocument,
+  getTeacherCredentials, resetTeacherCredentials,
 } from '../api/teachers';
 import { getTeacherMetrics } from '../api/analytics';
 import { formatDate, toPct } from '../utils';
 import { TEACHER_STATUS_STYLES } from '../constants';
+
+/* ── Credentials Panel ─────────────────────────────────── */
+function CredentialsPanel({ teacherId }) {
+  const [creds,    setCreds]    = useState(null);   // null = not loaded yet
+  const [loading,  setLoading]  = useState(true);
+  const [resetting, setResetting] = useState(false);
+  const [revealed,  setRevealed]  = useState(null); // { username, tempPassword }
+  const [copied,    setCopied]    = useState('');
+
+  useEffect(() => {
+    getTeacherCredentials(teacherId)
+      .then(r => setCreds(r.data?.data || null))
+      .catch(() => setCreds(null))
+      .finally(() => setLoading(false));
+  }, [teacherId]);
+
+  const copy = (text, key) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(key);
+      setTimeout(() => setCopied(''), 2000);
+    });
+  };
+
+  const handleReset = async () => {
+    if (!window.confirm('Reset login credentials for this teacher? They will need to use the new password.')) return;
+    setResetting(true);
+    try {
+      const r = await resetTeacherCredentials(teacherId);
+      const c = r.data?.credentials;
+      setCreds(prev => ({ ...(prev || {}), username: c.username, must_change_password: true }));
+      if (c.tempPassword) {
+        setRevealed(c);
+        toast.success('Password reset — new credentials shown below');
+      } else {
+        toast.success(c.note || 'Credentials reset and emailed');
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Reset failed');
+    } finally { setResetting(false); }
+  };
+
+  if (loading) return (
+    <div className="flex items-center gap-2 text-slate-400 text-sm py-2">
+      <Loader2 size={14} className="animate-spin" /> Loading credentials…
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      {/* Username row */}
+      <div className="flex items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800 rounded-xl px-4 py-3 border border-slate-200 dark:border-slate-700">
+        <div className="flex items-center gap-2 min-w-0">
+          <User size={14} className="text-slate-400 shrink-0" />
+          <span className="text-xs text-slate-500 font-medium shrink-0">Username</span>
+          <code className="font-mono text-sm text-slate-800 dark:text-slate-200 truncate">
+            {creds ? creds.username : <span className="text-red-400 italic">Not set up yet</span>}
+          </code>
+        </div>
+        {creds?.username && (
+          <button onClick={() => copy(creds.username, 'user')} className="text-slate-400 hover:text-emerald-600 transition-colors shrink-0">
+            {copied === 'user' ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+          </button>
+        )}
+      </div>
+
+      {/* Status row */}
+      {creds && (
+        <div className="flex items-center gap-2 text-xs text-slate-500 pl-1">
+          {creds.must_change_password ? (
+            <span className="flex items-center gap-1 text-amber-600">
+              <AlertTriangle size={12} /> Must change password on next login
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-emerald-600">
+              <ShieldCheck size={12} /> Password has been changed
+            </span>
+          )}
+          {creds.last_login_at && (
+            <span className="ml-2 text-slate-400">
+              · Last login: {new Date(creds.last_login_at).toLocaleDateString('en-PK')}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Newly revealed password after reset */}
+      {revealed?.tempPassword && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-4 py-3 space-y-2">
+          <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-1">
+            <AlertTriangle size={12} /> New temporary password (shown once)
+          </p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 font-mono text-sm text-amber-900 dark:text-amber-200 select-all">{revealed.tempPassword}</code>
+            <button onClick={() => copy(revealed.tempPassword, 'pass')} className="text-amber-500 hover:text-amber-700 transition-colors">
+              {copied === 'pass' ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex gap-2">
+        <button
+          onClick={handleReset}
+          disabled={resetting}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-400 text-xs font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-60 transition-colors"
+        >
+          {resetting ? <Loader2 size={13} className="animate-spin" /> : <KeyRound size={13} />}
+          {resetting ? 'Resetting…' : 'Reset Password'}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 /* ── Info row helper ── */
 function InfoRow({ icon: Icon, label, value }) {
@@ -446,6 +562,12 @@ export default function TeacherDetailPage() {
                   </button>
                 ))}
               </div>
+              <button
+                onClick={() => window.open(`/teachers/${id}/print`, '_blank')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                <Printer size={13} /> Print
+              </button>
               <Button size="sm" onClick={() => setEditOpen(true)}
                 style={{ background: 'linear-gradient(135deg, #059669, #0d9488)' }}>
                 <Pencil size={13} /> Edit Profile
@@ -533,6 +655,17 @@ export default function TeacherDetailPage() {
                       View / Upload Documents
                     </button>
                   </div>
+                </div>
+
+                {/* Login Credentials */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm p-5 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center">
+                      <KeyRound size={13} className="text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Login Credentials</p>
+                  </div>
+                  <CredentialsPanel teacherId={id} />
                 </div>
 
                 {/* Contact & details */}

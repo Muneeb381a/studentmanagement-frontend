@@ -1,51 +1,52 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, TrendingUp, Award, BookOpen, BarChart2, User } from 'lucide-react';
+import {
+  ArrowLeft, TrendingUp, Award, BookOpen, BarChart2,
+  CheckCircle2, XCircle, AlertCircle, Star,
+} from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { PageLoader } from '../components/ui/Spinner';
 import { getStudentPerformance } from '../api/exams';
 
-// ── Helpers ──────────────────────────────────────────────────
-const GRADE_COLOR = { 'A+': '#10b981', A: '#34d399', B: '#6366f1', C: '#f59e0b', D: '#f97316', F: '#ef4444' };
+// ── Grade config ──────────────────────────────────────────────
+const GRADE_COLOR = { 'A1': '#10b981', A: '#34d399', B: '#6366f1', C: '#f59e0b', D: '#f97316', F: '#ef4444' };
+const GRADE_BG    = { 'A1': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
+                       A:   'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
+                       B:   'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300',
+                       C:   'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+                       D:   'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300',
+                       F:   'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300' };
 const TYPE_LABEL  = { midterm: 'Midterm', final: 'Final', quiz: 'Quiz', monthly_test: 'Monthly', other: 'Other' };
 
-function gradeColor(g)  { return GRADE_COLOR[g] || '#94a3b8'; }
-function pctColor(pct)  {
+function gradeColor(g) { return GRADE_COLOR[g] || '#94a3b8'; }
+function gradeBg(g)    { return GRADE_BG[g]    || 'bg-slate-100 text-slate-600'; }
+function pctColor(pct) {
   if (pct >= 80) return '#10b981';
   if (pct >= 60) return '#6366f1';
   if (pct >= 50) return '#f59e0b';
   return '#ef4444';
 }
 
-// ── Mini bar (single cell in trend table) ────────────────────
+// ── Mini bar ─────────────────────────────────────────────────
 function MiniBar({ pct, passing }) {
-  const passingPct = passing * 100 / 100; // already percentage form
   const color = pct >= passing ? '#6366f1' : '#ef4444';
   return (
-    <div className="flex items-end gap-1.5">
-      <div className="relative w-20 h-5 bg-slate-100 dark:bg-slate-800 rounded overflow-hidden">
-        <div
-          style={{ width: `${Math.min(pct, 100)}%`, background: color }}
-          className="absolute inset-y-0 left-0 rounded transition-all"
-        />
-        {/* passing line */}
-        <div
-          style={{ left: `${Math.min(passing, 100)}%` }}
-          className="absolute inset-y-0 w-px bg-slate-400/60 dark:bg-slate-500/60"
-          title={`Pass: ${passing}%`}
-        />
+    <div className="flex items-center gap-2">
+      <div className="relative flex-1 h-4 bg-slate-100 dark:bg-slate-800 rounded overflow-hidden">
+        <div style={{ width: `${Math.min(pct, 100)}%`, background: color }} className="absolute inset-y-0 left-0 rounded transition-all" />
+        <div style={{ left: `${Math.min(passing, 100)}%` }} className="absolute inset-y-0 w-px bg-slate-400/60 dark:bg-slate-500/60" title={`Pass: ${passing}%`} />
       </div>
-      <span className="text-[11px] font-semibold tabular-nums" style={{ color }}>{pct.toFixed(0)}%</span>
+      <span className="text-[11px] font-bold tabular-nums w-9 text-right" style={{ color }}>{pct.toFixed(0)}%</span>
     </div>
   );
 }
 
-// ── Overall progress bar ─────────────────────────────────────
+// ── Overall progress bar ──────────────────────────────────────
 function PctBar({ pct }) {
   const color = pctColor(pct);
   return (
     <div className="flex items-center gap-2">
-      <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+      <div className="flex-1 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
         <div style={{ width: `${Math.min(pct, 100)}%`, background: color }} className="h-full rounded-full transition-all" />
       </div>
       <span className="text-xs font-bold tabular-nums" style={{ color }}>{pct.toFixed(1)}%</span>
@@ -53,7 +54,7 @@ function PctBar({ pct }) {
   );
 }
 
-// ── Stat card ────────────────────────────────────────────────
+// ── Stat pill ────────────────────────────────────────────────
 function StatPill({ label, value, sub, color }) {
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 px-5 py-4 space-y-0.5">
@@ -64,21 +65,78 @@ function StatPill({ label, value, sub, color }) {
   );
 }
 
+// ── Subject card ─────────────────────────────────────────────
+function SubjectCard({ sub, examLabels }) {
+  const marksByExam = {};
+  sub.exams.forEach(e => { marksByExam[e.exam_id] = e; });
+
+  const appeared = sub.exams.filter(e => !e.is_absent);
+  const pcts     = appeared.map(e => e.subject_percentage).filter(p => !isNaN(p));
+  const avg      = pcts.length ? pcts.reduce((s, p) => s + p, 0) / pcts.length : null;
+  const trend    = pcts.length >= 2 ? pcts[pcts.length - 1] - pcts[0] : null;
+  const passing  = appeared[0] ? Math.round(appeared[0].passing_marks / appeared[0].total_marks * 100) : 50;
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 space-y-3">
+      {/* Subject name + avg */}
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{sub.subject_name}</p>
+          {sub.subject_code && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 font-semibold">{sub.subject_code}</span>
+          )}
+        </div>
+        <div className="text-right">
+          {avg !== null ? (
+            <>
+              <p className="text-lg font-black tabular-nums" style={{ color: pctColor(avg) }}>{avg.toFixed(0)}%</p>
+              {trend !== null && (
+                <p className={`text-[10px] font-bold ${trend > 0 ? 'text-emerald-500' : trend < 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                  {trend > 0 ? '▲' : trend < 0 ? '▼' : '—'} {Math.abs(trend).toFixed(0)}%
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-xs text-slate-400">No data</p>
+          )}
+        </div>
+      </div>
+
+      {/* Per-exam mini bars */}
+      <div className="space-y-1.5">
+        {examLabels.map(e => {
+          const m = marksByExam[e.id];
+          return (
+            <div key={e.id} className="flex items-center gap-2">
+              <p className="text-[10px] text-slate-400 truncate w-24 shrink-0">{e.name}</p>
+              {m ? (
+                m.is_absent
+                  ? <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">AB</span>
+                  : <MiniBar pct={m.subject_percentage} passing={passing} />
+              ) : (
+                <span className="text-[10px] text-slate-300 dark:text-slate-700">—</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ────────────────────────────────────────────────
 export default function StudentPerformancePage() {
-  const { id }      = useParams();
-  const navigate    = useNavigate();
-  const [data, setData]   = useState(null);
+  const { id }    = useParams();
+  const navigate  = useNavigate();
+  const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError]   = useState('');
+  const [error,   setError]   = useState('');
+  const [showAll, setShowAll] = useState(false);   // toggle full exam history
 
   useEffect(() => {
     setLoading(true);
     getStudentPerformance(id)
-      .then(r => {
-        const d = r.data?.data ?? r.data;
-        setData(d);
-      })
+      .then(r => setData(r.data?.data ?? r.data))
       .catch(e => setError(e?.response?.data?.message || 'Failed to load performance data'))
       .finally(() => setLoading(false));
   }, [id]);
@@ -97,25 +155,41 @@ export default function StudentPerformancePage() {
   const { student, results, subjects } = data;
 
   // Derived stats
-  const totalExams    = results.length;
-  const passCount     = results.filter(r => r.result_status === 'pass').length;
-  const avgPct        = totalExams > 0
-    ? results.reduce((s, r) => s + parseFloat(r.percentage || 0), 0) / totalExams
-    : null;
-  const bestResult    = results.reduce((b, r) => (!b || parseFloat(r.percentage) > parseFloat(b.percentage)) ? r : b, null);
-  const bestRank      = results.reduce((b, r) => (!b || parseInt(r.rank) < parseInt(b.rank)) ? r : b, null);
+  const totalExams = results.length;
+  const passCount  = results.filter(r => r.result_status === 'pass').length;
+  const avgPct     = totalExams > 0 ? results.reduce((s, r) => s + parseFloat(r.percentage || 0), 0) / totalExams : null;
+  const bestResult = results.reduce((b, r) => (!b || parseFloat(r.percentage) > parseFloat(b.percentage)) ? r : b, null);
+  const bestRank   = results.reduce((b, r) => (!b || parseInt(r.rank) < parseInt(b.rank)) ? r : b, null);
 
-  // All exam labels in order (for trend header)
-  const examLabels = results.map(r => ({ id: r.exam_id, name: r.exam_name, type: r.exam_type }));
+  const examLabels    = results.map(r => ({ id: r.exam_id, name: r.exam_name, type: r.exam_type }));
+  const latestResult  = results[results.length - 1] || null;
+  const latestSubjects = latestResult
+    ? subjects.map(sub => {
+        const entry = sub.exams.find(e => e.exam_id === latestResult.exam_id);
+        return entry ? { ...entry, subject_name: sub.subject_name, subject_code: sub.subject_code } : null;
+      }).filter(Boolean)
+    : [];
 
-  const cardCls = 'bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm';
-  const thCls   = 'px-4 py-2.5 text-left text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-[0.08em] whitespace-nowrap';
-  const tdCls   = 'px-4 py-3 text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap';
+  // Strong (avg ≥ passing) vs needs-attention subjects
+  const subjectAvgs = subjects.map(sub => {
+    const appeared = sub.exams.filter(e => !e.is_absent);
+    const pcts     = appeared.map(e => e.subject_percentage).filter(p => !isNaN(p));
+    const avg      = pcts.length ? pcts.reduce((s, p) => s + p, 0) / pcts.length : null;
+    const passing  = appeared[0] ? Math.round(appeared[0].passing_marks / appeared[0].total_marks * 100) : 50;
+    return { name: sub.subject_name, avg, passing };
+  }).filter(s => s.avg !== null);
+  const strong    = subjectAvgs.filter(s => s.avg >= s.passing).sort((a, b) => b.avg - a.avg);
+  const weak      = subjectAvgs.filter(s => s.avg < s.passing).sort((a, b) => a.avg - b.avg);
+
+  const cardCls  = 'bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm';
+  const thCls    = 'px-4 py-2.5 text-left text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-[0.08em] whitespace-nowrap';
+  const tdCls    = 'px-4 py-3 text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap';
+  const visibleResults = showAll ? results : results.slice(-5);
 
   return (
     <Layout>
-      {/* ── Header ── */}
-      <div className="bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-700 px-4 sm:px-6 lg:px-8 pt-8 pb-20">
+      {/* ── Hero header ── */}
+      <div className="bg-linear-to-br from-indigo-600 via-indigo-700 to-purple-700 px-4 sm:px-6 lg:px-8 pt-8 pb-20">
         <div className="max-w-6xl mx-auto">
           <button
             onClick={() => navigate('/students')}
@@ -143,23 +217,23 @@ export default function StudentPerformancePage() {
 
         {/* ── KPI pills ── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <StatPill label="Exams Taken"  value={totalExams}  sub="Total recorded" color="#6366f1" />
+          <StatPill label="Exams Taken"  value={totalExams} sub="Total recorded" color="#6366f1" />
           <StatPill
             label="Pass Rate"
-            value={totalExams ? `${Math.round((passCount / totalExams) * 100)}%` : '—'}
+            value={totalExams ? `${Math.round(passCount / totalExams * 100)}%` : '—'}
             sub={`${passCount} / ${totalExams} passed`}
             color={passCount === totalExams ? '#10b981' : '#f59e0b'}
           />
           <StatPill
             label="Avg Score"
             value={avgPct !== null ? `${avgPct.toFixed(1)}%` : '—'}
-            sub={avgPct !== null ? `Grade ${bestResult?.grade || '—'}` : 'No results yet'}
+            sub={bestResult ? `Best grade: ${bestResult.grade}` : 'No results yet'}
             color={avgPct !== null ? pctColor(avgPct) : '#94a3b8'}
           />
           <StatPill
             label="Best Rank"
             value={bestRank ? `#${bestRank.rank}` : '—'}
-            sub={bestRank ? `of ${bestRank.total_in_class} in ${bestRank.exam_name}` : 'No rankings yet'}
+            sub={bestRank ? `of ${bestRank.total_in_class} · ${bestRank.exam_name}` : 'No rankings yet'}
             color="#f59e0b"
           />
         </div>
@@ -175,7 +249,104 @@ export default function StudentPerformancePage() {
 
         {totalExams > 0 && (
           <>
-            {/* ── All Exam Results table ── */}
+            {/* ── Strong / Needs-attention pills ── */}
+            {(strong.length > 0 || weak.length > 0) && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {strong.length > 0 && (
+                  <div className={`${cardCls} p-4`}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Star size={14} className="text-emerald-500" />
+                      <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wide">Strong Subjects</h3>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {strong.map(s => (
+                        <span key={s.name} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-semibold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-700">
+                          <CheckCircle2 size={10} /> {s.name}
+                          <span className="ml-0.5 opacity-70">{s.avg.toFixed(0)}%</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {weak.length > 0 && (
+                  <div className={`${cardCls} p-4`}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <AlertCircle size={14} className="text-red-400" />
+                      <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wide">Needs Attention</h3>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {weak.map(s => (
+                        <span key={s.name} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-semibold bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-700">
+                          <XCircle size={10} /> {s.name}
+                          <span className="ml-0.5 opacity-70">{s.avg.toFixed(0)}%</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Latest exam detail ── */}
+            {latestResult && latestSubjects.length > 0 && (
+              <div className={cardCls}>
+                <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+                  <Award size={16} className="text-amber-500" />
+                  <h2 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Latest Exam — {latestResult.exam_name}</h2>
+                  <span className={`ml-auto px-2.5 py-0.5 rounded-lg text-xs font-bold ${
+                    latestResult.result_status === 'pass'
+                      ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+                      : 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400'
+                  }`}>
+                    {latestResult.result_status === 'pass' ? 'Pass' : 'Fail'} · {parseFloat(latestResult.percentage).toFixed(1)}%
+                  </span>
+                </div>
+                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {latestSubjects.map(s => {
+                    const pct = parseFloat(s.subject_percentage);
+                    const passing = Math.round(s.passing_marks / s.total_marks * 100);
+                    return (
+                      <div key={s.subject_name} className={[
+                        'rounded-xl border p-3 space-y-2',
+                        s.is_absent
+                          ? 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700'
+                          : pct >= passing
+                          ? 'bg-emerald-50/40 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-800'
+                          : 'bg-red-50/40 dark:bg-red-900/10 border-red-100 dark:border-red-800',
+                      ].join(' ')}>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-bold text-slate-700 dark:text-slate-200">{s.subject_name}</p>
+                          {s.is_absent ? (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400">AB</span>
+                          ) : (
+                            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-lg ${gradeBg(s.subject_grade)}`}>
+                              {s.subject_grade}
+                            </span>
+                          )}
+                        </div>
+                        {s.is_absent ? (
+                          <p className="text-xs text-slate-400">Absent</p>
+                        ) : (
+                          <>
+                            <MiniBar pct={pct} passing={passing} />
+                            <p className="text-[10px] text-slate-400 tabular-nums">
+                              {parseFloat(s.obtained_marks).toFixed(0)} / {s.total_marks} marks
+                            </p>
+                            {s.remarks && (
+                              <p className="text-[10px] italic text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-700 pt-1.5 mt-1">
+                                "{s.remarks}"
+                              </p>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ── Exam history table ── */}
             <div className={cardCls}>
               <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
                 <Award size={16} className="text-indigo-500" />
@@ -186,24 +357,23 @@ export default function StudentPerformancePage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50/80 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-800">
-                      {['Exam', 'Type', 'Year', 'Marks', 'Percentage', 'Grade', 'Rank', 'Status'].map(h => (
+                      {['Exam', 'Type', 'Marks', 'Percentage', 'Grade', 'Rank', 'Status'].map(h => (
                         <th key={h} className={thCls}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 dark:divide-slate-800/60">
-                    {results.map(r => (
+                    {visibleResults.map(r => (
                       <tr key={r.exam_id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/20 transition-colors">
                         <td className={tdCls}>
                           <p className="font-semibold text-slate-800 dark:text-slate-200">{r.exam_name}</p>
-                          <p className="text-xs text-slate-400">{r.start_date?.slice(0, 10)}</p>
+                          <p className="text-xs text-slate-400">{r.start_date?.slice(0, 10)} · {r.academic_year}</p>
                         </td>
                         <td className={tdCls}>
                           <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-xs font-semibold text-slate-600 dark:text-slate-400">
                             {TYPE_LABEL[r.exam_type] || r.exam_type}
                           </span>
                         </td>
-                        <td className={`${tdCls} text-slate-500`}>{r.academic_year}</td>
                         <td className={tdCls}>
                           <span className="font-semibold text-slate-800 dark:text-slate-200">{parseFloat(r.obtained_marks).toFixed(0)}</span>
                           <span className="text-slate-400"> / {parseFloat(r.total_marks).toFixed(0)}</span>
@@ -212,10 +382,8 @@ export default function StudentPerformancePage() {
                           <PctBar pct={parseFloat(r.percentage)} />
                         </td>
                         <td className={tdCls}>
-                          <span
-                            className="inline-flex w-9 h-9 items-center justify-center rounded-xl text-white text-xs font-black"
-                            style={{ background: gradeColor(r.grade) }}
-                          >
+                          <span className={`inline-flex items-center justify-center w-9 h-9 rounded-xl text-xs font-black text-white`}
+                            style={{ background: gradeColor(r.grade) }}>
                             {r.grade}
                           </span>
                         </td>
@@ -238,106 +406,28 @@ export default function StudentPerformancePage() {
                   </tbody>
                 </table>
               </div>
+              {results.length > 5 && (
+                <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 text-center">
+                  <button onClick={() => setShowAll(v => !v)}
+                    className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold hover:underline">
+                    {showAll ? 'Show less' : `Show all ${results.length} exams`}
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* ── Subject-wise Trend ── */}
+            {/* ── Subject cards grid ── */}
             {subjects.length > 0 && (
-              <div className={cardCls}>
-                <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
-                  <BookOpen size={16} className="text-purple-500" />
-                  <h2 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Subject-wise Performance Trend</h2>
-                  <span className="ml-auto text-xs text-slate-400 font-medium">{subjects.length} subject{subjects.length !== 1 ? 's' : ''}</span>
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <BookOpen size={15} className="text-purple-500" />
+                  <h2 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Subject-wise Performance</h2>
+                  <span className="text-xs text-slate-400 ml-1">{subjects.length} subject{subjects.length !== 1 ? 's' : ''}</span>
                 </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-slate-50/80 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-800">
-                        <th className={`${thCls} min-w-36`}>Subject</th>
-                        {examLabels.map(e => (
-                          <th key={e.id} className={`${thCls} min-w-32`}>
-                            <span className="block truncate max-w-28">{e.name}</span>
-                            <span className="font-normal text-slate-300 dark:text-slate-700 normal-case tracking-normal">
-                              {TYPE_LABEL[e.type] || e.type}
-                            </span>
-                          </th>
-                        ))}
-                        <th className={`${thCls} min-w-28`}>Average</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50 dark:divide-slate-800/60">
-                      {subjects.map(sub => {
-                        // Build a map exam_id → mark entry for this subject
-                        const marksByExam = {};
-                        sub.exams.forEach(e => { marksByExam[e.exam_id] = e; });
-
-                        const subjectPcts = sub.exams.map(e => e.subject_percentage).filter(p => !isNaN(p));
-                        const subAvg = subjectPcts.length > 0
-                          ? subjectPcts.reduce((s, p) => s + p, 0) / subjectPcts.length
-                          : null;
-
-                        // trend direction (last vs first if 2+ exams)
-                        const trend = subjectPcts.length >= 2
-                          ? subjectPcts[subjectPcts.length - 1] - subjectPcts[0]
-                          : null;
-
-                        return (
-                          <tr key={sub.subject_name} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/20 transition-colors">
-                            <td className={`${tdCls} font-semibold text-slate-800 dark:text-slate-200`}>
-                              <div>
-                                {sub.subject_name}
-                                {sub.subject_code && (
-                                  <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">
-                                    {sub.subject_code}
-                                  </span>
-                                )}
-                              </div>
-                              {trend !== null && (
-                                <div className={`text-[10px] font-bold mt-0.5 ${trend > 0 ? 'text-emerald-500' : trend < 0 ? 'text-red-400' : 'text-slate-400'}`}>
-                                  {trend > 0 ? '▲' : trend < 0 ? '▼' : '—'} {Math.abs(trend).toFixed(0)}%
-                                </div>
-                              )}
-                            </td>
-                            {examLabels.map(e => {
-                              const m = marksByExam[e.id];
-                              return (
-                                <td key={e.id} className={`${tdCls}`}>
-                                  {m ? (
-                                    <MiniBar pct={m.subject_percentage} passing={Math.round((m.passing_marks / m.total_marks) * 100)} />
-                                  ) : (
-                                    <span className="text-xs text-slate-300 dark:text-slate-700">—</span>
-                                  )}
-                                </td>
-                              );
-                            })}
-                            <td className={tdCls}>
-                              {subAvg !== null ? (
-                                <span className="font-bold text-sm" style={{ color: pctColor(subAvg) }}>
-                                  {subAvg.toFixed(1)}%
-                                </span>
-                              ) : (
-                                <span className="text-slate-300 dark:text-slate-700">—</span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Legend */}
-                <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-4 text-xs text-slate-400">
-                  <span className="flex items-center gap-1.5">
-                    <span className="inline-block w-3 h-3 rounded-sm bg-indigo-500" /> Passed
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="inline-block w-3 h-3 rounded-sm bg-red-400" /> Failed
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="inline-block w-px h-3 bg-slate-400" /> Pass threshold
-                  </span>
-                  <span className="ml-auto text-slate-300 dark:text-slate-700">▲▼ = trend from first to last exam</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {subjects.map(sub => (
+                    <SubjectCard key={sub.subject_name} sub={sub} examLabels={examLabels} />
+                  ))}
                 </div>
               </div>
             )}

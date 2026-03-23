@@ -30,7 +30,8 @@ export const uploadStudentDocument = (id, formData) =>
 export const deleteStudentDocument = (studentId, docId) =>
   api.delete(`/students/${studentId}/documents/${docId}`);
 
-// Reset / get credentials
+// Credentials
+export const getStudentCredentials   = (id) => api.get(`/students/${id}/credentials`);
 export const resetStudentCredentials = (id) => api.post(`/students/${id}/reset-credentials`);
 
 // Import / Export

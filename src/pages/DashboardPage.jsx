@@ -197,14 +197,17 @@ export default function DashboardPage() {
     loadDash();
   }, []);
 
-  const total         = students.length;
-  const active        = students.filter(s => s.status === 'active').length;
+  // Use accurate counts from the dashboard stats API (avoids pagination cap of 50)
+  const counts        = dash?.counts;
+  const total         = counts?.total_students  ?? students.length;
+  const active        = counts?.total_students  ?? students.filter(s => s.status === 'active').length;
+  const males         = counts?.male_students   ?? students.filter(s => s.gender === 'Male').length;
+  const females       = counts?.female_students ?? students.filter(s => s.gender === 'Female').length;
+  const activeTeach   = counts?.total_teachers  ?? teachers.filter(t => t.status === 'active').length;
+  const totalClasses  = counts?.total_classes   ?? classes.length;
   const inactive      = students.filter(s => s.status === 'inactive').length;
   const suspended     = students.filter(s => s.status === 'suspended').length;
   const graduated     = students.filter(s => s.status === 'graduated').length;
-  const males         = students.filter(s => s.gender === 'Male').length;
-  const females       = students.filter(s => s.gender === 'Female').length;
-  const activeTeach   = teachers.filter(t => t.status === 'active').length;
   const recentStuds   = [...students].reverse().slice(0, 6);
   const upcomingExams = exams.filter(e => e.status !== 'completed').slice(0, 4);
   const ongoingExams  = exams.filter(e => e.status === 'ongoing').length;
@@ -247,9 +250,9 @@ export default function DashboardPage() {
             </div>
             <div className="flex items-center gap-3 flex-wrap">
               {[
-                { value: total,          label: 'Students',      color: 'from-indigo-300 to-purple-300' },
-                { value: activeTeach,    label: 'Teachers',      color: 'from-emerald-300 to-teal-300'  },
-                { value: classes.length, label: 'Classes',       color: 'from-amber-300 to-orange-300'  },
+                { value: total,         label: 'Students', color: 'from-indigo-300 to-purple-300' },
+                { value: activeTeach,   label: 'Teachers', color: 'from-emerald-300 to-teal-300'  },
+                { value: totalClasses,  label: 'Classes',  color: 'from-amber-300 to-orange-300'  },
                 { value: ongoingExams,   label: 'Ongoing Exams', color: 'from-pink-300 to-rose-300'     },
               ].map(({ value, label, color }) => (
                 <div key={label} className="bg-white/10 backdrop-blur-sm border border-white/15 rounded-2xl px-4 py-3 text-center min-w-[80px]">
@@ -280,10 +283,10 @@ export default function DashboardPage() {
 
           {/* ══ LIVE KPI CARDS ══ */}
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-            <BigStatCard label="Total Students"  value={total}           icon={Users}         sub="All enrollments"         from="#6366f1" to="#8b5cf6" iconCls="bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400" />
-            <BigStatCard label="Active Students" value={active}          icon={UserCheck}     pct={toPct(active, total)}    from="#10b981" to="#0d9488" iconCls="bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" />
-            <BigStatCard label="Total Teachers"  value={teachers.length} icon={GraduationCap} sub={`${activeTeach} active`} from="#f59e0b" to="#f97316" iconCls="bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400" />
-            <BigStatCard label="Total Classes"   value={classes.length}  icon={BookOpen}      sub="Across all grades"       from="#3b82f6" to="#06b6d4" iconCls="bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400" />
+            <BigStatCard label="Total Students"  value={total}        icon={Users}         sub="All enrollments"         from="#6366f1" to="#8b5cf6" iconCls="bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400" />
+            <BigStatCard label="Active Students" value={active}       icon={UserCheck}     pct={toPct(active, total)}    from="#10b981" to="#0d9488" iconCls="bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" />
+            <BigStatCard label="Total Teachers"  value={activeTeach}  icon={GraduationCap} sub="Active teachers"          from="#f59e0b" to="#f97316" iconCls="bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400" />
+            <BigStatCard label="Total Classes"   value={totalClasses} icon={BookOpen}      sub="Across all grades"       from="#3b82f6" to="#06b6d4" iconCls="bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400" />
           </div>
 
           {/* ══ LIVE KPI ROW 2 — real-time data ══ */}
@@ -635,7 +638,7 @@ export default function DashboardPage() {
             {/* Class Enrollment */}
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
               <SectionHeader
-                title="Class Enrollment" sub={`${classes.length} active classes`}
+                title="Class Enrollment" sub={`${totalClasses} active classes`}
                 icon={BookOpen} iconCls="bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
                 action={{ label: 'Manage', fn: () => navigate('/classes') }}
               />
@@ -676,10 +679,10 @@ export default function DashboardPage() {
           </div>
 
           {/* ══ TEACHERS STRIP ══ */}
-          {teachers.length > 0 && (
+          {(teachers.length > 0 || activeTeach > 0) && (
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
               <SectionHeader
-                title="Teaching Staff" sub={`${activeTeach} active · ${teachers.length} total`}
+                title="Teaching Staff" sub={`${activeTeach} active`}
                 icon={GraduationCap} iconCls="bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400"
                 action={{ label: 'View all', fn: () => navigate('/teachers') }}
               />
@@ -702,10 +705,10 @@ export default function DashboardPage() {
                     </button>
                   );
                 })}
-                {teachers.length > 12 && (
+                {activeTeach > 12 && (
                   <button onClick={() => navigate('/teachers')} className="flex flex-col items-center gap-1.5 shrink-0">
                     <div className="w-11 h-11 rounded-2xl bg-slate-100 dark:bg-slate-800 border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center text-xs font-bold text-slate-500">
-                      +{teachers.length - 12}
+                      +{activeTeach - 12}
                     </div>
                     <p className="text-[10px] text-slate-400 font-medium">More</p>
                   </button>

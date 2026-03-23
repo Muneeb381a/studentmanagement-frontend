@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import {
   CalendarDays, NotebookPen, FileBarChart2, Clock,
-  BookOpen, Users, CheckCircle2, AlertCircle,
+  CheckCircle2, AlertCircle, Plus, X, CalendarRange,
+  ClipboardList, Loader2, ChevronRight,
 } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { PageLoader } from '../components/ui/Spinner';
@@ -9,6 +10,8 @@ import { useAuth } from '../context/AuthContext';
 import { getTimetable } from '../api/timetable';
 import { getHomework } from '../api/homework';
 import { getExams } from '../api/exams';
+import { getLeaveBalance, getLeaves, getLeaveTypes, applyLeave, cancelLeave } from '../api/leave';
+import toast from 'react-hot-toast';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -33,44 +36,218 @@ function StatCard({ icon: Icon, label, value, color }) {
   );
 }
 
+const STATUS_CFG = {
+  pending:   { label: 'Pending',   cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
+  approved:  { label: 'Approved',  cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
+  rejected:  { label: 'Rejected',  cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
+  cancelled: { label: 'Cancelled', cls: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' },
+};
+
+function calcWorkingDays(from, to) {
+  if (!from || !to) return 0;
+  let days = 0;
+  const cur = new Date(from);
+  const end = new Date(to);
+  while (cur <= end) {
+    if (cur.getDay() !== 0) days++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return days;
+}
+
+// ── Apply Leave Modal ────────────────────────────────────────
+function ApplyLeaveModal({ teacherId, leaveTypes, onClose, onSaved }) {
+  const [form, setForm] = useState({ leave_type_id: '', from_date: '', to_date: '', reason: '' });
+  const [saving, setSaving] = useState(false);
+
+  const totalDays = calcWorkingDays(form.from_date, form.to_date);
+  const selectedType = leaveTypes.find(lt => String(lt.id) === String(form.leave_type_id));
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.leave_type_id || !form.from_date || !form.to_date) {
+      toast.error('Please fill all required fields');
+      return;
+    }
+    if (new Date(form.to_date) < new Date(form.from_date)) {
+      toast.error('End date must be after start date');
+      return;
+    }
+    setSaving(true);
+    try {
+      await applyLeave({
+        teacher_id:    teacherId,
+        leave_type_id: form.leave_type_id,
+        from_date:     form.from_date,
+        to_date:       form.to_date,
+        total_days:    selectedType?.name === 'Half Day' ? 0.5 : totalDays,
+        reason:        form.reason,
+      });
+      toast.success('Leave application submitted');
+      onSaved();
+    } catch (err) {
+      toast.error(err.displayMessage || 'Failed to apply for leave');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
+          <h3 className="font-bold text-slate-800 dark:text-white text-sm">Apply for Leave</h3>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+            <X size={16} className="text-slate-500" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Leave Type *</label>
+            <select
+              value={form.leave_type_id}
+              onChange={e => set('leave_type_id', e.target.value)}
+              className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+              required
+            >
+              <option value="">Select leave type</option>
+              {leaveTypes.map(lt => (
+                <option key={lt.id} value={lt.id}>{lt.name} {lt.days_allowed > 0 ? `(${lt.days_allowed} days/yr)` : ''}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">From Date *</label>
+              <input
+                type="date"
+                value={form.from_date}
+                onChange={e => set('from_date', e.target.value)}
+                className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">To Date *</label>
+              <input
+                type="date"
+                value={form.to_date}
+                onChange={e => set('to_date', e.target.value)}
+                min={form.from_date}
+                className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                required
+              />
+            </div>
+          </div>
+
+          {form.from_date && form.to_date && (
+            <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl px-4 py-2.5 text-sm text-indigo-700 dark:text-indigo-300 font-semibold">
+              {selectedType?.name === 'Half Day' ? '0.5 days' : `${totalDays} working day${totalDays !== 1 ? 's' : ''}`}
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Reason</label>
+            <textarea
+              value={form.reason}
+              onChange={e => set('reason', e.target.value)}
+              rows={3}
+              placeholder="Brief reason for leave…"
+              className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving}
+              className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">
+              {saving && <Loader2 size={14} className="animate-spin" />}
+              Submit Application
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Dashboard ───────────────────────────────────────────
 export default function TeacherDashboardPage() {
   const { user } = useAuth();
-  const [timetable, setTimetable] = useState([]);
-  const [homework,  setHomework]  = useState([]);
-  const [exams,     setExams]     = useState([]);
-  const [loading,   setLoading]   = useState(true);
+  const [timetable,   setTimetable]   = useState([]);
+  const [homework,    setHomework]    = useState([]);
+  const [exams,       setExams]       = useState([]);
+  const [leaves,      setLeaves]      = useState([]);
+  const [balance,     setBalance]     = useState([]);
+  const [leaveTypes,  setLeaveTypes]  = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [showApply,   setShowApply]   = useState(false);
 
   const todayName = DAYS[new Date().getDay()];
 
+  const fetchLeaves = async () => {
+    if (!user.entity_id) return;
+    try {
+      const [lvRes, blRes] = await Promise.all([
+        getLeaves({ teacher_id: user.entity_id, limit: 10 }),
+        getLeaveBalance({ teacher_id: user.entity_id }),
+      ]);
+      setLeaves(Array.isArray(lvRes.data) ? lvRes.data : []);
+      setBalance(Array.isArray(blRes.data) ? blRes.data : []);
+    } catch { /* silent */ }
+  };
+
   useEffect(() => {
     const fetchAll = async () => {
-      try {
-        const [ttRes, hwRes, exRes] = await Promise.all([
-          user.entity_id
-            ? getTimetable({ teacher_id: user.entity_id })
-            : Promise.resolve({ data: [] }),
-          user.entity_id
-            ? getHomework({ teacher_id: user.entity_id, limit: 10 })
-            : Promise.resolve({ data: [] }),
-          getExams({ limit: 5 }),
-        ]);
-        setTimetable(Array.isArray(ttRes.data) ? ttRes.data : []);
-        setHomework(Array.isArray(hwRes.data) ? hwRes.data : []);
-        setExams(Array.isArray(exRes.data) ? exRes.data : []);
-      } catch { /* silent */ }
+      const empty = { data: [] };
+      const [ttRes, hwRes, exRes, ltRes] = await Promise.all([
+        user.entity_id ? getTimetable({ teacher_id: user.entity_id }).catch(() => empty) : Promise.resolve(empty),
+        user.entity_id ? getHomework({ teacher_id: user.entity_id, limit: 10 }).catch(() => empty) : Promise.resolve(empty),
+        getExams().catch(() => empty),
+        getLeaveTypes().catch(() => empty),
+      ]);
+      setTimetable(Array.isArray(ttRes.data) ? ttRes.data : []);
+      setHomework(Array.isArray(hwRes.data) ? hwRes.data : []);
+      setExams(Array.isArray(exRes.data) ? exRes.data : []);
+      setLeaveTypes(Array.isArray(ltRes.data) ? ltRes.data : []);
+      await fetchLeaves();
       setLoading(false);
     };
     fetchAll();
-  }, [user.entity_id]);
+  }, [user.entity_id]); // eslint-disable-line
 
-  const todayPeriods = timetable.filter(p => p.day_of_week === todayName);
-  const pendingHw    = homework.filter(h => h.status !== 'graded');
-  const upcomingExams = exams.filter(e => e.status === 'scheduled').slice(0, 3);
+  const todayPeriods  = timetable.filter(p => p.day_of_week === todayName);
+  const pendingHw     = homework.filter(h => h.status !== 'graded');
+  const today         = new Date(); today.setHours(0, 0, 0, 0);
+  const upcomingExams = exams
+    .filter(e => {
+      const d = e.start_date ? new Date(e.start_date) : null;
+      return d && d >= today && (e.status === 'scheduled' || e.status === 'upcoming');
+    })
+    .sort((a, b) => new Date(a.start_date) - new Date(b.start_date))
+    .slice(0, 3);
+
+  const pendingLeaves  = leaves.filter(l => l.status === 'pending').length;
 
   if (loading) return <Layout><PageLoader /></Layout>;
 
   return (
     <Layout>
+      {showApply && (
+        <ApplyLeaveModal
+          teacherId={user.entity_id}
+          leaveTypes={leaveTypes}
+          onClose={() => setShowApply(false)}
+          onSaved={() => { setShowApply(false); fetchLeaves(); }}
+        />
+      )}
+
       {/* Hero */}
       <div
         className="relative overflow-hidden px-6 pt-10 pb-20"
@@ -90,10 +267,10 @@ export default function TeacherDashboardPage() {
 
         {/* Stats row */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard icon={CalendarDays}  label="Today's Periods"  value={todayPeriods.length}  color="#6366f1" />
-          <StatCard icon={NotebookPen}   label="Homework Assigned" value={homework.length}      color="#8b5cf6" />
-          <StatCard icon={AlertCircle}   label="Pending Review"    value={pendingHw.length}     color="#f59e0b" />
-          <StatCard icon={FileBarChart2} label="Upcoming Exams"    value={upcomingExams.length} color="#10b981" />
+          <StatCard icon={CalendarDays}  label="Today's Periods"   value={todayPeriods.length}  color="#6366f1" />
+          <StatCard icon={NotebookPen}   label="Homework Assigned" value={homework.length}       color="#8b5cf6" />
+          <StatCard icon={AlertCircle}   label="Pending Review"    value={pendingHw.length}      color="#f59e0b" />
+          <StatCard icon={FileBarChart2} label="Upcoming Exams"    value={upcomingExams.length}  color="#10b981" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -180,17 +357,112 @@ export default function TeacherDashboardPage() {
                     </span>
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-semibold text-slate-800 dark:text-white">{ex.title}</p>
-                    <p className="text-[11px] text-slate-400">{ex.academic_year || ''}</p>
+                    <p className="text-sm font-semibold text-slate-800 dark:text-white">
+                      {ex.exam_name || ex.title || 'Unnamed Exam'}
+                    </p>
+                    <p className="text-[11px] text-slate-400">{ex.exam_type || ''} · {ex.academic_year || ''}</p>
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                    Scheduled
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 capitalize">
+                    {ex.status}
                   </span>
                 </div>
               ))}
             </div>
           </div>
         )}
+
+        {/* Leave section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+          {/* Leave balance */}
+          {balance.some(b => b.days_allowed > 0) && (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
+              <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+                <CalendarRange size={16} className="text-teal-500" />
+                <h2 className="font-bold text-slate-800 dark:text-white text-sm">Leave Balance</h2>
+                <span className="ml-auto text-[11px] text-slate-400">{new Date().getFullYear()}</span>
+              </div>
+              <div className="p-4 grid grid-cols-2 gap-3">
+                {balance.filter(b => b.days_allowed > 0).slice(0, 4).map(b => (
+                  <div key={b.leave_type_id} className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3">
+                    <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 truncate">{b.leave_type_name}</p>
+                    <div className="flex items-end gap-1 mt-1">
+                      <span className="text-xl font-extrabold text-slate-800 dark:text-white">
+                        {b.remaining_days ?? 0}
+                      </span>
+                      <span className="text-[11px] text-slate-400 mb-0.5">/ {b.days_allowed} left</span>
+                    </div>
+                    <div className="mt-1.5 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-teal-500"
+                        style={{ width: `${Math.min(100, (b.used_days / b.days_allowed) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* My leave requests */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+              <ClipboardList size={16} className="text-violet-500" />
+              <h2 className="font-bold text-slate-800 dark:text-white text-sm">My Leaves</h2>
+              {pendingLeaves > 0 && (
+                <span className="ml-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                  {pendingLeaves} pending
+                </span>
+              )}
+              <button
+                onClick={() => setShowApply(true)}
+                className="ml-auto flex items-center gap-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-lg"
+              >
+                <Plus size={13} />
+                Apply
+              </button>
+            </div>
+            {leaves.length === 0 ? (
+              <div className="px-5 py-8 text-center">
+                <CalendarRange size={28} className="mx-auto text-slate-300 dark:text-slate-600 mb-2" />
+                <p className="text-sm text-slate-400">No leave applications yet</p>
+                <button
+                  onClick={() => setShowApply(true)}
+                  className="mt-3 text-xs font-semibold text-indigo-600 hover:underline flex items-center gap-1 mx-auto"
+                >
+                  <Plus size={12} /> Apply for leave
+                </button>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {leaves.slice(0, 5).map(lv => {
+                  const cfg = STATUS_CFG[lv.status] ?? STATUS_CFG.pending;
+                  return (
+                    <div key={lv.id} className="px-5 py-3 flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 dark:text-white truncate">
+                          {lv.leave_type_name || 'Leave'}
+                        </p>
+                        <p className="text-[11px] text-slate-400">
+                          {lv.from_date ? new Date(lv.from_date).toLocaleDateString('en-PK', { day: 'numeric', month: 'short' }) : '—'}
+                          {' – '}
+                          {lv.to_date ? new Date(lv.to_date).toLocaleDateString('en-PK', { day: 'numeric', month: 'short' }) : '—'}
+                          {' · '}
+                          {lv.total_days} day{lv.total_days !== 1 ? 's' : ''}
+                        </p>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${cfg.cls}`}>
+                        {cfg.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+        </div>
+
       </div>
     </Layout>
   );

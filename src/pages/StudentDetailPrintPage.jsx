@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { getStudent } from '../api/students';
-import { resetStudentCredentials } from '../api/students';
+import { getStudent, getStudentCredentials } from '../api/students';
 
 
 function Row({ label, value }) {
@@ -36,12 +35,12 @@ export default function StudentDetailPrintPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const r = await getStudent(id);
+        const [r, cr] = await Promise.all([
+          getStudent(id),
+          showCreds ? getStudentCredentials(id) : Promise.resolve(null),
+        ]);
         setStudent(r.data?.data ?? r.data);
-        if (showCreds) {
-          const cr = await resetStudentCredentials(id);
-          setCreds(cr.data?.credentials ?? cr.data);
-        }
+        if (cr) setCreds(cr.data);
       } catch (e) {
         setError(e.displayMessage || 'Failed to load student');
       } finally {
@@ -50,13 +49,6 @@ export default function StudentDetailPrintPage() {
     };
     load();
   }, [id, showCreds]);
-
-  useEffect(() => {
-    if (!loading && !error) {
-      const t = setTimeout(() => window.print(), 600);
-      return () => clearTimeout(t);
-    }
-  }, [loading, error]);
 
   if (loading) return <div style={{ display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',fontFamily:'Arial' }}>Loading…</div>;
   if (error)   return <div style={{ display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',fontFamily:'Arial',color:'red' }}>{error}</div>;
@@ -129,16 +121,29 @@ export default function StudentDetailPrintPage() {
         }
       `}</style>
 
-      {/* Print button (hidden on print) */}
-      <div className="no-print" style={{ position:'fixed',top:16,right:16,zIndex:999,display:'flex',gap:8 }}>
-        <button onClick={() => window.print()}
-          style={{ background:'linear-gradient(135deg,#6366f1,#8b5cf6)',color:'white',border:'none',borderRadius:10,padding:'8px 18px',fontWeight:700,fontSize:13,cursor:'pointer' }}>
-          Print
+      {/* Screen controls (hidden on print) */}
+      <div className="no-print" style={{ position:'fixed',top:0,left:0,right:0,zIndex:999,background:'#fff',borderBottom:'1px solid #e2e8f0',padding:'8px 16px',display:'flex',alignItems:'center',gap:8 }}>
+        <button onClick={() => window.history.back()}
+          style={{ background:'#f1f5f9',color:'#475569',border:'1px solid #e2e8f0',borderRadius:8,padding:'6px 12px',fontWeight:600,fontSize:12,cursor:'pointer' }}>
+          ← Back
         </button>
-        <button onClick={() => window.close()}
-          style={{ background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,padding:'8px 14px',fontWeight:600,fontSize:13,cursor:'pointer' }}>
-          Close
-        </button>
+        <div style={{ marginLeft:'auto', display:'flex', gap:8 }}>
+          {showCreds ? (
+            <button onClick={() => window.location.href = window.location.pathname}
+              style={{ background:'#f1f5f9',color:'#64748b',border:'1px solid #e2e8f0',borderRadius:8,padding:'6px 12px',fontWeight:600,fontSize:12,cursor:'pointer' }}>
+              Hide Credentials
+            </button>
+          ) : (
+            <button onClick={() => window.location.href = `?creds=1`}
+              style={{ background:'#fef3c7',color:'#92400e',border:'1px solid #fcd34d',borderRadius:8,padding:'6px 12px',fontWeight:700,fontSize:12,cursor:'pointer' }}>
+              🔐 Include Credentials
+            </button>
+          )}
+          <button onClick={() => window.print()}
+            style={{ background:'linear-gradient(135deg,#6366f1,#8b5cf6)',color:'white',border:'none',borderRadius:8,padding:'6px 16px',fontWeight:700,fontSize:12,cursor:'pointer' }}>
+            🖨 Print
+          </button>
+        </div>
       </div>
 
       <div className="page">
@@ -252,19 +257,38 @@ export default function StudentDetailPrintPage() {
         </div>
 
         {/* Credentials */}
-        {creds && (
+        {showCreds && (
           <div className="creds-box">
-            <div className="creds-title">Student Portal Login Credentials</div>
-            <div className="creds-row">
-              <span className="creds-label">Username</span>
-              <span className="creds-value">{creds.username}</span>
-            </div>
-            <div className="creds-row">
-              <span className="creds-label">Password</span>
-              <span className="creds-value">{creds.password}</span>
-            </div>
+            <div className="creds-title">🔐 Student Portal Login Credentials — Confidential</div>
+            {creds?.data ? (
+              <>
+                <div className="creds-row">
+                  <span className="creds-label">Username</span>
+                  <span className="creds-value">{creds.data.username}</span>
+                </div>
+                <div className="creds-row">
+                  <span className="creds-label">Password</span>
+                  <span className="creds-value">
+                    {creds.data.must_change_password
+                      ? `Stu@${creds.student_id || s.id}`
+                      : '(changed by student — reset to get a new one)'}
+                  </span>
+                </div>
+                {creds.data.last_login_at && (
+                  <div className="creds-row">
+                    <span className="creds-label">Last Login</span>
+                    <span className="creds-value">{new Date(creds.data.last_login_at).toLocaleDateString('en-PK')}</span>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="creds-row">
+                <span className="creds-label">Status</span>
+                <span className="creds-value">Portal account not set up yet. Create student account from Students page.</span>
+              </div>
+            )}
             <div className="creds-note">
-              Login at the SchoolMS portal · Student is advised to change the password after first login
+              Login at the SchoolMS portal · Student must change default password after first login · Keep this document confidential
             </div>
           </div>
         )}

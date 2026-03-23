@@ -24,6 +24,14 @@ import {
   ListChecks,
   BarChart3,
   FileText,
+  Clock,
+  Stethoscope,
+  ShoppingCart,
+  CalendarCheck,
+  Award,
+  Users2,
+  RotateCcw,
+  FileCheck,
 } from 'lucide-react';
 
 /* ── Navigation links ── */
@@ -215,6 +223,48 @@ export const NAV_LINKS = [
     to: '/analytics/custom-report',
     icon: ClipboardList,
     description: 'Build & export custom reports',
+  },
+  {
+    label: 'Late Arrivals',
+    to: '/late-arrivals',
+    icon: Clock,
+    description: 'Late student arrival register',
+  },
+  {
+    label: 'Medical Records',
+    to: '/medical',
+    icon: Stethoscope,
+    description: 'Student health & vaccination records',
+  },
+  {
+    label: 'Canteen',
+    to: '/canteen',
+    icon: ShoppingCart,
+    description: 'POS & canteen revenue tracking',
+  },
+  {
+    label: 'PTM Scheduler',
+    to: '/meetings',
+    icon: CalendarCheck,
+    description: 'Parent-teacher meeting slots',
+  },
+  {
+    label: 'Scholarships',
+    to: '/scholarships',
+    icon: Award,
+    description: 'Concession approval workflow',
+  },
+  {
+    label: 'Alumni',
+    to: '/alumni',
+    icon: Users2,
+    description: 'Track graduated students',
+  },
+  {
+    label: 'Quizzes',
+    to: '/quizzes',
+    icon: FileCheck,
+    description: 'Online assessments & tests',
   },
 ];
 

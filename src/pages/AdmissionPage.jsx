@@ -1,20 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, User, Phone, BookOpen, Users, Heart,
   Check, ChevronRight, ChevronLeft, Camera, FileUp,
   Trash2, Eye, Download, KeyRound, Copy, Printer,
+  Search, UserCheck, X as XIcon, Loader2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Layout from '../components/layout/Layout';
 import Input, { Select, Textarea } from '../components/ui/Input';
 import { PageLoader } from '../components/ui/Spinner';
 import {
-  getStudent, createStudent, updateStudent,
+  getStudent, getStudents, createStudent, updateStudent,
   uploadStudentPhoto, getStudentDocuments, uploadStudentDocument,
   deleteStudentDocument, resetStudentCredentials,
 } from '../api/students';
 import { getClasses } from '../api/classes';
+import { getBuses, getAssignments, createAssignment } from '../api/transport';
 import { GRADES } from '../constants';
 
 
@@ -31,7 +33,7 @@ const BLANK = {
   mother_name: '', mother_cnic: '', mother_phone: '', mother_occupation: '',
   guardian_name: '', guardian_relation: '', guardian_phone: '', guardian_cnic: '',
   medical_condition: '', allergies: '', disability: '',
-  transport_required: false, transport_route: '',
+  transport_required: false, transport_route: '', bus_id: '', transport_type: 'both',
   hostel_required: false, siblings_in_school: '',
   extra_curricular: '', house_color: '',
 };
@@ -132,10 +134,14 @@ function CredentialsModal({ credentials, studentId, onClose, navigate }) {
             Share these with the student/parent. The password is auto-generated and can be changed from the login screen.
           </p>
         </div>
-        <div className="px-6 pb-6 flex gap-3">
+        <div className="px-6 pb-6 flex flex-wrap gap-2">
           <button onClick={() => { onClose(); navigate('/students/' + studentId + '/print'); }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+            className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
             <Printer size={14} /> Print Profile
+          </button>
+          <button onClick={() => navigate('/students/' + studentId + '/edit?tab=documents')}
+            className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400 text-sm font-medium hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors">
+            <FileUp size={14} /> Upload Documents
           </button>
           <button onClick={onClose}
             className="flex-1 py-2.5 rounded-xl text-white text-sm font-bold transition-all hover:opacity-90"
@@ -330,16 +336,137 @@ function DocumentsTab({ studentId }) {
   );
 }
 
+/* ── Sibling Family Copier ────────────────────────────────── */
+const FAMILY_FIELDS = [
+  'father_name','father_cnic','father_phone','father_email',
+  'father_occupation','father_education',
+  'mother_name','mother_cnic','mother_phone','mother_occupation',
+  'guardian_name','guardian_relation','guardian_phone','guardian_cnic',
+];
+
+function SiblingCopier({ onCopy, copiedFrom, onClear, excludeId }) {
+  const [query,     setQuery]     = useState('');
+  const [results,   setResults]   = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [open,      setOpen]      = useState(false);
+  const timerRef = useRef(null);
+  const wrapRef  = useRef(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleSearch = (q) => {
+    setQuery(q);
+    clearTimeout(timerRef.current);
+    if (!q.trim()) { setResults([]); setOpen(false); return; }
+    timerRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await getStudents({ search: q.trim(), status: 'active', limit: 8 });
+        const list = (Array.isArray(res.data) ? res.data : []).filter(s => String(s.id) !== String(excludeId));
+        setResults(list);
+        setOpen(list.length > 0);
+      } catch { setResults([]); }
+      finally { setSearching(false); }
+    }, 320);
+  };
+
+  const handleSelect = async (student) => {
+    setOpen(false);
+    setQuery('');
+    setResults([]);
+    try {
+      const res = await getStudent(student.id);
+      const s = res.data?.data ?? res.data;
+      const family = {};
+      FAMILY_FIELDS.forEach(f => { family[f] = s[f] || ''; });
+      onCopy(family, s.full_name);
+    } catch { toast.error('Could not load student details'); }
+  };
+
+  if (copiedFrom) {
+    return (
+      <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 mb-2">
+        <UserCheck size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300 truncate">
+            Family details copied from <span className="font-bold">{copiedFrom}</span>
+          </p>
+          <p className="text-xs text-emerald-600 dark:text-emerald-500">You can still edit any field below</p>
+        </div>
+        <button onClick={onClear} title="Clear copied details"
+          className="p-1 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 transition-colors">
+          <XIcon size={14} />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={wrapRef} className="relative mb-2">
+      <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800/50">
+        <Users size={16} className="text-indigo-500 shrink-0" />
+        <div className="flex-1">
+          <p className="text-xs font-bold text-indigo-700 dark:text-indigo-300 mb-1.5">
+            Enrolling a sibling? Copy parent details from an existing student
+          </p>
+          <div className="relative">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={query}
+              onChange={e => handleSearch(e.target.value)}
+              placeholder="Search by student name…"
+              className="w-full pl-8 pr-8 py-2 rounded-lg border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400/40"
+            />
+            {searching && (
+              <Loader2 size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-400 animate-spin" />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {open && results.length > 0 && (
+        <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
+          {results.map(s => (
+            <button key={s.id} type="button" onClick={() => handleSelect(s)}
+              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors text-left border-b border-slate-100 dark:border-slate-800 last:border-0">
+              <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center shrink-0 overflow-hidden">
+                {s.photo_url
+                  ? <img src={s.photo_url} alt="" className="w-full h-full object-cover" />
+                  : <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{s.full_name?.[0]?.toUpperCase()}</span>
+                }
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{s.full_name}</p>
+                <p className="text-xs text-slate-400 truncate">
+                  {s.class_name || s.grade || '—'}{s.father_name ? ` · Father: ${s.father_name}` : ''}
+                </p>
+              </div>
+              <span className="ml-auto text-xs font-medium text-indigo-500 shrink-0">Copy →</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ══════════════════════════════════════════════════════════════
    Main component
 ══════════════════════════════════════════════════════════════ */
 export default function AdmissionPage() {
   const { id }   = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const isEdit   = Boolean(id);
 
   const [step,        setStep]        = useState(1);
-  const [activeTab,   setActiveTab]   = useState('form'); // 'form' | 'documents'
+  const [activeTab,   setActiveTab]   = useState(() => searchParams.get('tab') || 'form');
   const [form,        setForm]        = useState(BLANK);
   const [photoFile,   setPhotoFile]   = useState(null);
   const [photoPreview,setPhotoPreview]= useState(null);
@@ -350,6 +477,9 @@ export default function AdmissionPage() {
   const [errors,      setErrors]      = useState({});
   const [credentials, setCredentials] = useState(null);
   const [createdId,   setCreatedId]   = useState(null);
+  const [siblingCopied, setSiblingCopied] = useState(null); // name of sibling whose family was copied
+  const [buses,         setBuses]         = useState([]);
+  const [busesLoaded,   setBusesLoaded]   = useState(false);
 
   useEffect(() => {
     getClasses().then(r => setClasses(Array.isArray(r.data) ? r.data : [])).catch(() => {});
@@ -405,11 +535,26 @@ export default function AdmissionPage() {
           disability:         s.disability          || '',
           transport_required: s.transport_required  ?? false,
           transport_route:    s.transport_route     || '',
+          bus_id:             '',
+          transport_type:     'both',
           hostel_required:    s.hostel_required     ?? false,
           siblings_in_school: s.siblings_in_school  || '',
           extra_curricular:   s.extra_curricular    || '',
           house_color:        s.house_color         || '',
         });
+        // Also load existing transport assignment
+        if (s.transport_required) {
+          getAssignments({ student_id: id })
+            .then(tr => {
+              const active = (Array.isArray(tr.data) ? tr.data : []).find(a => a.status === 'active');
+              if (active) setForm(f => ({
+                ...f,
+                bus_id: String(active.bus_id || ''),
+                transport_type: active.transport_type || 'both',
+              }));
+            })
+            .catch(() => {});
+        }
       })
       .catch(() => toast.error('Failed to load student'))
       .finally(() => setLoading(false));
@@ -419,7 +564,24 @@ export default function AdmissionPage() {
     const { name, value } = e.target;
     setForm(f => ({ ...f, [name]: value }));
     if (errors[name]) setErrors(er => ({ ...er, [name]: '' }));
+    // Lazy-load buses the first time transport is enabled
+    if (name === 'transport_required' && value === true && !busesLoaded) {
+      setBusesLoaded(true);
+      getBuses({ status: 'active' })
+        .then(r => setBuses(Array.isArray(r.data) ? r.data : []))
+        .catch(() => {});
+    }
   };
+
+  // Pre-load buses if editing a student who already has transport enabled
+  useEffect(() => {
+    if (isEdit && form.transport_required && !busesLoaded) {
+      setBusesLoaded(true);
+      getBuses({ status: 'active' })
+        .then(r => setBuses(Array.isArray(r.data) ? r.data : []))
+        .catch(() => {});
+    }
+  }, [isEdit, form.transport_required, busesLoaded]);
 
   const validateStep = (s) => {
     if (s !== 1) return {};
@@ -444,8 +606,8 @@ export default function AdmissionPage() {
     }
     setSaving(true);
     try {
-      // Strip display-only fields (prefixed with _) before sending
-      const { _admission_number, _roll_number, ...rest } = form;
+      // Strip display-only fields and non-student-table fields before sending
+      const { _admission_number, _roll_number, bus_id, transport_type, ...rest } = form;
       const payload = {
         ...rest,
         class_id:           form.class_id ? Number(form.class_id) : null,
@@ -454,6 +616,17 @@ export default function AdmissionPage() {
       };
       if (isEdit) {
         await updateStudent(id, payload);
+        // Update transport assignment if bus was selected
+        if (form.transport_required && bus_id) {
+          const selectedBus = buses.find(b => String(b.id) === String(bus_id));
+          createAssignment({
+            student_id: Number(id),
+            bus_id: Number(bus_id),
+            route_id: selectedBus?.assigned_route_id || selectedBus?.bus_id || null,
+            transport_type: transport_type || 'both',
+            notes: form.transport_route || null,
+          }).catch(() => {}); // non-fatal
+        }
         toast.success('Student updated successfully');
         navigate('/students');
       } else {
@@ -469,12 +642,26 @@ export default function AdmissionPage() {
           try { await uploadStudentPhoto(newId, fd); } catch { /* non-fatal */ }
         }
 
+        // Create transport assignment if bus was selected
+        if (newId && form.transport_required && bus_id) {
+          const selectedBus = buses.find(b => String(b.id) === String(bus_id));
+          if (selectedBus?.assigned_route_id) {
+            createAssignment({
+              student_id: newId,
+              bus_id: Number(bus_id),
+              route_id: Number(selectedBus.assigned_route_id),
+              transport_type: transport_type || 'both',
+              notes: form.transport_route || null,
+            }).catch(() => {}); // non-fatal
+          }
+        }
+
         if (creds) {
           setCreatedId(newId);
           setCredentials(creds);
         } else {
           toast.success('Student enrolled successfully');
-          navigate('/students');
+          navigate(`/students/${newId}/edit?tab=documents`);
         }
       }
     } catch (err) {
@@ -602,6 +789,15 @@ export default function AdmissionPage() {
     ),
     4: (
       <div className="space-y-4">
+        <SiblingCopier
+          excludeId={id}
+          copiedFrom={siblingCopied}
+          onCopy={(family, name) => {
+            setForm(f => ({ ...f, ...family }));
+            setSiblingCopied(name);
+          }}
+          onClear={() => setSiblingCopied(null)}
+        />
         <SectionHead label="Father's Information" />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input label="Father's Full Name" name="father_name" value={form.father_name} onChange={onChange} placeholder="e.g. Mr. Ali Khan" className="sm:col-span-2" />
@@ -645,7 +841,93 @@ export default function AdmissionPage() {
         <div className="space-y-3 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
           <Toggle label="Transport Required" name="transport_required" checked={Boolean(form.transport_required)} onChange={onChange} helpText="Student will use school bus / transport service" />
           {form.transport_required && (
-            <Input label="Transport Route / Area" name="transport_route" value={form.transport_route} onChange={onChange} placeholder="e.g. Model Town, Gulberg" />
+            <div className="space-y-3 pt-1">
+              {/* Bus selector */}
+              <div>
+                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Assign Bus / Driver</label>
+                <div className="relative">
+                  <select
+                    value={form.bus_id}
+                    onChange={e => onChange({ target: { name: 'bus_id', value: e.target.value } })}
+                    className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400">
+                    <option value="">— Select bus (optional) —</option>
+                    {buses.map(b => (
+                      <option key={b.id} value={b.id}>
+                        Bus {b.bus_number}{b.route_name ? ` · ${b.route_name}` : ''}{b.driver_name ? ` · Driver: ${b.driver_name}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronRight size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 rotate-90 text-slate-400 pointer-events-none" />
+                </div>
+              </div>
+
+              {/* Driver info card */}
+              {form.bus_id && (() => {
+                const bus = buses.find(b => String(b.id) === String(form.bus_id));
+                if (!bus) return null;
+                return (
+                  <div className="rounded-xl border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50 dark:bg-indigo-900/20 p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-500 dark:text-indigo-400 mb-2">Driver & Bus Info</p>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase font-semibold">Bus Number</p>
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{bus.bus_number}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase font-semibold">Vehicle No.</p>
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{bus.vehicle_number || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase font-semibold">Driver Name</p>
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{bus.driver_name || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase font-semibold">Driver Phone</p>
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{bus.driver_phone || '—'}</p>
+                      </div>
+                      {bus.driver_license && (
+                        <div>
+                          <p className="text-[10px] text-slate-400 uppercase font-semibold">License No.</p>
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{bus.driver_license}</p>
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase font-semibold">Capacity</p>
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                          {bus.assigned_students ?? '?'} / {bus.capacity} seats
+                        </p>
+                      </div>
+                      {bus.route_name && (
+                        <div className="col-span-2">
+                          <p className="text-[10px] text-slate-400 uppercase font-semibold">Route</p>
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{bus.route_name}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Transport type */}
+              <div>
+                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Transport Type</label>
+                <div className="flex gap-2">
+                  {[['both','Both (Pick & Drop)'],['pickup','Pick Up Only'],['dropoff','Drop Off Only']].map(([val, lbl]) => (
+                    <button key={val} type="button"
+                      onClick={() => onChange({ target: { name: 'transport_type', value: val } })}
+                      className={`flex-1 py-2 px-2 rounded-xl text-xs font-semibold border transition-colors ${
+                        form.transport_type === val
+                          ? 'bg-indigo-500 text-white border-indigo-500'
+                          : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-indigo-300'
+                      }`}>
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <Input label="Pickup Area / Stop Notes" name="transport_route" value={form.transport_route} onChange={onChange} placeholder="e.g. Model Town Gate 2, near Masjid" />
+            </div>
           )}
           <div className="border-t border-slate-100 dark:border-slate-800 pt-3">
             <Toggle label="Hostel Required" name="hostel_required" checked={Boolean(form.hostel_required)} onChange={onChange} helpText="Student will reside in school hostel" />
@@ -724,10 +1006,10 @@ export default function AdmissionPage() {
 
         <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-3xl mx-auto space-y-6">
 
-          {isEdit && activeTab === 'documents' ? (
+          {(isEdit || createdId) && activeTab === 'documents' ? (
             loading ? <PageLoader /> : (
               <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
-                <DocumentsTab studentId={id} />
+                <DocumentsTab studentId={id || createdId} />
               </div>
             )
           ) : (

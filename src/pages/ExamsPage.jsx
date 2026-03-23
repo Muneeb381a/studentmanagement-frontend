@@ -1,10 +1,17 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
 import {
   ClipboardList, Plus, Pencil, Trash2, ChevronDown, Search,
   BookOpen, BarChart3, Trophy, FileText, Check, X, Calculator,
   Calendar, AlertCircle, CheckCircle2, Clock, TrendingUp, Printer,
+  FileEdit, ChevronUp, Loader2, GripVertical, Copy,
+  AlertTriangle, Link2, CheckCircle, Lock, Unlock, Info,
 } from 'lucide-react';
+import {
+  getPapers, createPaper, updatePaper, deletePaper,
+  updateSection, addQuestion, updateQuestion, deleteQuestion,
+  getTeacherUsers,
+} from '../api/papers';
 import Layout   from '../components/layout/Layout';
 import Modal    from '../components/ui/Modal';
 import Button   from '../components/ui/Button';
@@ -12,6 +19,7 @@ import Input    from '../components/ui/Input';
 import Spinner  from '../components/ui/Spinner';
 import {
   getExams, createExam, updateExam, deleteExam, updateExamStatus,
+  publishResults, unpublishResults,
   getExamSubjects, addExamSubjects,
   getMarks, submitMarks,
   calculateResults, getResults, getStudentReportCard, getClassRanking,
@@ -19,7 +27,8 @@ import {
 
 import { getClasses }  from '../api/classes';
 import { getStudents } from '../api/students';
-import { getClassSubjects } from '../api/subjects';
+import { getClassSubjects, getSubjects } from '../api/subjects';
+import { useAuth }     from '../context/AuthContext';
 
 // ─────────────────────────────────────────────────────────────
 //  Constants & helpers
@@ -29,6 +38,7 @@ const TABS = [
   { id: 'config',  label: 'Marks Config', icon: BookOpen },
   { id: 'marks',   label: 'Enter Marks',  icon: Pencil },
   { id: 'results', label: 'Results',      icon: BarChart3 },
+  { id: 'papers',  label: 'Paper Creator',icon: FileEdit },
 ];
 
 const EXAM_TYPES = ['midterm', 'final', 'quiz', 'monthly_test', 'other'];
@@ -40,7 +50,7 @@ const STATUS_META = {
 };
 
 const GRADE_META = {
-  'A+': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+  'A1': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
   'A':  'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
   'B':  'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
   'C':  'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300',
@@ -170,6 +180,7 @@ export default function ExamsPage() {
         {tab === 'config'  && <MarksConfigTab />}
         {tab === 'marks'   && <EnterMarksTab />}
         {tab === 'results' && <ResultsTab />}
+        {tab === 'papers'  && <PaperCreatorTab />}
       </div>
     </Layout>
   );
@@ -285,7 +296,14 @@ function ExamCard({ exam, onEdit, onDelete, onStatusChange }) {
       {/* Top row */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{exam.exam_name}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{exam.exam_name}</p>
+            {exam.results_published_at && (
+              <span title="Results published — marks locked" className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-700">
+                <Lock size={8} /> Published
+              </span>
+            )}
+          </div>
           <p className="text-xs text-slate-400 mt-0.5 capitalize">{typeLabel} · {exam.academic_year}</p>
         </div>
         <StatusBadge status={exam.status} />
@@ -605,9 +623,10 @@ function EnterMarksTab() {
   const [classes,   setClasses]   = useState([]);
   const [selExam,   setSelExam]   = useState('');
   const [selClass,  setSelClass]  = useState('');
-  const [subjects,  setSubjects]  = useState([]);   // exam_subjects for this exam+class
+  const [subjects,  setSubjects]  = useState([]);
   const [students,  setStudents]  = useState([]);
-  const [marks,     setMarks]     = useState({});   // marks[studentId][subjectId] = value
+  // marks[studentId][subjectId] = { val: '', absent: false, remarks: '' }
+  const [marks,     setMarks]     = useState({});
   const [loading,   setLoading]   = useState(false);
   const [saving,    setSaving]    = useState(false);
 
@@ -619,6 +638,9 @@ function EnterMarksTab() {
       })
       .catch(() => {});
   }, []);
+
+  const selectedExamObj = exams.find(e => String(e.id) === String(selExam));
+  const isLocked = !!selectedExamObj?.results_published_at;
 
   useEffect(() => {
     if (!selExam || !selClass) { setSubjects([]); setStudents([]); setMarks({}); return; }
@@ -636,13 +658,16 @@ function EnterMarksTab() {
         setSubjects(examSubs);
         setStudents(studs);
 
-        // Pre-fill marks grid
         const grid = {};
         studs.forEach(s => {
           grid[s.id] = {};
           examSubs.forEach(sub => {
             const found = existing.find(m => m.student_id === s.id && m.subject_id === sub.subject_id);
-            grid[s.id][sub.subject_id] = found ? String(found.obtained_marks) : '';
+            grid[s.id][sub.subject_id] = {
+              val:     found && !found.is_absent ? String(found.obtained_marks) : '',
+              absent:  found?.is_absent ?? false,
+              remarks: found?.remarks ?? '',
+            };
           });
         });
         setMarks(grid);
@@ -651,26 +676,44 @@ function EnterMarksTab() {
       .finally(() => setLoading(false));
   }, [selExam, selClass]);
 
-  const setMark = (studentId, subjectId, val) =>
-    setMarks(m => ({ ...m, [studentId]: { ...m[studentId], [subjectId]: val } }));
+  const patchCell = (studentId, subjectId, patch) =>
+    setMarks(m => ({
+      ...m,
+      [studentId]: {
+        ...m[studentId],
+        [subjectId]: { ...m[studentId]?.[subjectId], ...patch },
+      },
+    }));
+
+  const toggleAbsent = (studentId, subjectId) => {
+    const cell = marks[studentId]?.[subjectId] ?? { val: '', absent: false, remarks: '' };
+    patchCell(studentId, subjectId, { absent: !cell.absent, val: '' });
+  };
 
   const handleSubmit = async () => {
     const marksArr = [];
     for (const student of students) {
       for (const sub of subjects) {
-        const val = marks[student.id]?.[sub.subject_id];
-        if (val === '' || val == null) continue;
-        const num = parseFloat(val);
+        const cell = marks[student.id]?.[sub.subject_id] ?? { val: '', absent: false, remarks: '' };
+        if (cell.absent) {
+          marksArr.push({
+            student_id: student.id, subject_id: sub.subject_id,
+            class_id: Number(selClass), obtained_marks: 0,
+            is_absent: true, remarks: cell.remarks || null,
+          });
+          continue;
+        }
+        if (cell.val === '' || cell.val == null) continue;
+        const num = parseFloat(cell.val);
         if (isNaN(num)) { toast.error(`Invalid marks for ${student.full_name}`); return; }
         if (num > parseFloat(sub.total_marks)) {
           toast.error(`${student.full_name}: marks for ${sub.subject_name} exceed total (${sub.total_marks})`);
           return;
         }
         marksArr.push({
-          student_id:     student.id,
-          subject_id:     sub.subject_id,
-          class_id:       Number(selClass),
-          obtained_marks: num,
+          student_id: student.id, subject_id: sub.subject_id,
+          class_id: Number(selClass), obtained_marks: num,
+          is_absent: false, remarks: cell.remarks || null,
         });
       }
     }
@@ -695,8 +738,59 @@ function EnterMarksTab() {
         <ClassSelect value={selClass} onChange={setSelClass} classes={classes} label="Select Class" />
       </div>
 
+      {/* Lock banner */}
+      {isLocked && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-sm text-amber-700 dark:text-amber-400">
+          <Lock size={15} className="shrink-0" />
+          <span><span className="font-semibold">Results are published.</span> Marks are locked — ask an admin to unpublish before making changes.</span>
+        </div>
+      )}
+
       {(!selExam || !selClass) ? (
-        <EmptyBox icon={Pencil} message="Select an exam and class to enter student marks." />
+        /* ── Improved empty state (#7) ── */
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-8">
+          <div className="max-w-sm mx-auto text-center space-y-6">
+            <div className="w-14 h-14 rounded-2xl bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center mx-auto">
+              <Pencil size={26} className="text-orange-400" />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-700 dark:text-slate-200 text-base">Enter Student Marks</h3>
+              <p className="text-sm text-slate-400 mt-1">Follow the steps below to record marks</p>
+            </div>
+            <div className="space-y-3 text-left">
+              {[
+                { n: 1, active: false,   label: 'Select an Exam',  sub: 'Choose the exam from the dropdown above', icon: ClipboardList },
+                { n: 2, active: !!selExam && !selClass, label: 'Select a Class', sub: 'Choose which class you are entering marks for', icon: BookOpen },
+                { n: 3, active: false,   label: 'Fill in Marks',   sub: 'Enter marks per student per subject, mark absences', icon: Check },
+              ].map(step => {
+                const done = (step.n === 1 && !!selExam) || (step.n === 2 && !!selClass);
+                return (
+                  <div key={step.n} className={[
+                    'flex items-start gap-3 p-3 rounded-xl border transition-colors',
+                    done
+                      ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-700'
+                      : step.active
+                      ? 'bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-700'
+                      : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700',
+                  ].join(' ')}>
+                    <div className={[
+                      'w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5',
+                      done ? 'bg-emerald-500 text-white' : step.active ? 'bg-orange-400 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-500',
+                    ].join(' ')}>
+                      {done ? <Check size={12} /> : step.n}
+                    </div>
+                    <div>
+                      <p className={`text-sm font-semibold ${done ? 'text-emerald-700 dark:text-emerald-400' : step.active ? 'text-orange-700 dark:text-orange-400' : 'text-slate-600 dark:text-slate-300'}`}>
+                        {step.label}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-0.5">{step.sub}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       ) : loading ? (
         <div className="flex justify-center py-10"><Spinner /></div>
       ) : subjects.length === 0 ? (
@@ -710,7 +804,9 @@ function EnterMarksTab() {
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
                 {students.length} Students · {subjects.length} Subjects
               </p>
-              <p className="text-xs text-slate-400">Leave blank to skip a subject</p>
+              <p className="text-xs text-slate-400">
+                Click <span className="font-semibold text-slate-500">AB</span> to mark absent · add remarks below the marks
+              </p>
             </div>
             <table className="w-full text-sm min-w-max">
               <thead>
@@ -719,7 +815,7 @@ function EnterMarksTab() {
                     Student
                   </th>
                   {subjects.map(s => (
-                    <th key={s.subject_id} className="px-3 py-3 text-center min-w-[110px]">
+                    <th key={s.subject_id} className="px-3 py-3 text-center min-w-[130px]">
                       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{s.subject_name}</p>
                       <p className="text-[10px] text-slate-400 font-normal mt-0.5">/ {s.total_marks} (pass {s.passing_marks})</p>
                     </th>
@@ -738,31 +834,65 @@ function EnterMarksTab() {
                       )}
                     </td>
                     {subjects.map(sub => {
-                      const val = marks[student.id]?.[sub.subject_id] ?? '';
-                      const num = parseFloat(val);
-                      const isOver  = val !== '' && !isNaN(num) && num > parseFloat(sub.total_marks);
-                      const isFail  = val !== '' && !isNaN(num) && num < parseFloat(sub.passing_marks);
+                      const cell    = marks[student.id]?.[sub.subject_id] ?? { val: '', absent: false, remarks: '' };
+                      const num     = parseFloat(cell.val);
+                      const isOver  = !cell.absent && cell.val !== '' && !isNaN(num) && num > parseFloat(sub.total_marks);
+                      const isFail  = !cell.absent && cell.val !== '' && !isNaN(num) && num < parseFloat(sub.passing_marks);
                       return (
-                        <td key={sub.subject_id} className="px-3 py-2 text-center">
-                          <input
-                            type="number"
-                            min="0"
-                            max={sub.total_marks}
-                            step="0.5"
-                            value={val}
-                            onChange={e => setMark(student.id, sub.subject_id, e.target.value)}
-                            className={[
-                              'w-20 text-center text-sm rounded-lg border px-2 py-1.5',
-                              'focus:outline-none focus:ring-2 focus:ring-orange-500/30',
-                              'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200',
-                              isOver
-                                ? 'border-red-400 bg-red-50 dark:bg-red-900/20'
-                                : isFail
-                                ? 'border-amber-300 bg-amber-50 dark:bg-amber-900/20'
-                                : 'border-slate-200 dark:border-slate-700',
-                            ].join(' ')}
-                            placeholder="–"
-                          />
+                        <td key={sub.subject_id} className="px-2 py-2 text-center">
+                          <div className="flex flex-col items-center gap-1">
+                            {/* Marks row: input + AB toggle */}
+                            <div className="flex items-center gap-1">
+                              {cell.absent ? (
+                                <div className="flex items-center gap-1">
+                                  <span className="w-16 text-center text-sm font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded-lg border border-slate-300 dark:border-slate-600 px-2 py-1.5">
+                                    AB
+                                  </span>
+                                </div>
+                              ) : (
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={sub.total_marks}
+                                  step="0.5"
+                                  value={cell.val}
+                                  onChange={e => patchCell(student.id, sub.subject_id, { val: e.target.value })}
+                                  className={[
+                                    'w-16 text-center text-sm rounded-lg border px-2 py-1.5',
+                                    'focus:outline-none focus:ring-2 focus:ring-orange-500/30',
+                                    'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200',
+                                    isOver
+                                      ? 'border-red-400 bg-red-50 dark:bg-red-900/20'
+                                      : isFail
+                                      ? 'border-amber-300 bg-amber-50 dark:bg-amber-900/20'
+                                      : 'border-slate-200 dark:border-slate-700',
+                                  ].join(' ')}
+                                  placeholder="–"
+                                />
+                              )}
+                              <button
+                                type="button"
+                                title={cell.absent ? 'Mark as present' : 'Mark as absent'}
+                                onClick={() => toggleAbsent(student.id, sub.subject_id)}
+                                className={[
+                                  'text-[10px] font-bold px-1.5 py-1 rounded-md border transition-colors',
+                                  cell.absent
+                                    ? 'bg-slate-500 text-white border-slate-500 hover:bg-slate-400'
+                                    : 'bg-white dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-600 hover:border-slate-400 hover:text-slate-600',
+                                ].join(' ')}
+                              >
+                                AB
+                              </button>
+                            </div>
+                            {/* Remarks input */}
+                            <input
+                              type="text"
+                              value={cell.remarks}
+                              onChange={e => patchCell(student.id, sub.subject_id, { remarks: e.target.value })}
+                              placeholder="remark…"
+                              className="w-[104px] text-[10px] text-center rounded border border-slate-200 dark:border-slate-700 bg-transparent text-slate-500 dark:text-slate-400 px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-orange-400/40 placeholder:text-slate-300"
+                            />
+                          </div>
                         </td>
                       );
                     })}
@@ -773,13 +903,14 @@ function EnterMarksTab() {
           </div>
 
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <p className="text-xs text-slate-400">
-              <span className="inline-block w-3 h-3 rounded bg-amber-100 dark:bg-amber-900/30 mr-1 align-middle" />Below passing ·
-              <span className="inline-block w-3 h-3 rounded bg-red-100 dark:bg-red-900/20 ml-2 mr-1 align-middle" />Exceeds total
+            <p className="text-xs text-slate-400 flex items-center gap-3">
+              <span><span className="inline-block w-3 h-3 rounded bg-amber-100 dark:bg-amber-900/30 mr-1 align-middle" />Below passing</span>
+              <span><span className="inline-block w-3 h-3 rounded bg-red-100 dark:bg-red-900/20 mr-1 align-middle" />Exceeds total</span>
+              <span><span className="inline-block w-5 h-4 rounded bg-slate-200 dark:bg-slate-700 mr-1 align-middle text-[8px] font-bold text-slate-500 flex items-center justify-center">AB</span>Absent</span>
             </p>
-            <Button loading={saving} onClick={handleSubmit}
-              style={{ background: 'linear-gradient(135deg,#f59e0b,#f97316)' }}>
-              <Check size={14} /> Save All Marks
+            <Button loading={saving} onClick={handleSubmit} disabled={isLocked}
+              style={{ background: isLocked ? undefined : 'linear-gradient(135deg,#f59e0b,#f97316)' }}>
+              {isLocked ? <><Lock size={14} /> Locked</> : <><Check size={14} /> Save All Marks</>}
             </Button>
           </div>
         </>
@@ -792,6 +923,8 @@ function EnterMarksTab() {
 //  TAB 4 — Results
 // ─────────────────────────────────────────────────────────────
 function ResultsTab() {
+  const { user } = useAuth();
+  const isAdmin  = user?.role === 'admin';
   const [exams,        setExams]        = useState([]);
   const [classes,      setClasses]      = useState([]);
   const [selExam,      setSelExam]      = useState('');
@@ -799,7 +932,8 @@ function ResultsTab() {
   const [results,      setResults]      = useState([]);
   const [loading,      setLoading]      = useState(false);
   const [calculating,  setCalculating]  = useState(false);
-  const [reportCard,   setReportCard]   = useState(null);   // { summary, subjects }
+  const [publishing,   setPublishing]   = useState(false);
+  const [reportCard,   setReportCard]   = useState(null);
   const [reportOpen,   setReportOpen]   = useState(false);
 
   useEffect(() => {
@@ -810,6 +944,17 @@ function ResultsTab() {
       })
       .catch(() => {});
   }, []);
+
+  const selectedExamObj = exams.find(e => String(e.id) === String(selExam));
+  const isLocked = !!selectedExamObj?.results_published_at;
+
+  // Refresh exam list so published_at stays current
+  const refreshExams = async () => {
+    try {
+      const e = await getExams();
+      setExams(Array.isArray(e.data) ? e.data : []);
+    } catch {}
+  };
 
   const loadResults = useCallback(async () => {
     if (!selExam || !selClass) { setResults([]); return; }
@@ -841,10 +986,27 @@ function ResultsTab() {
     }
   };
 
+  const handlePublish = async () => {
+    setPublishing(true);
+    try {
+      if (isLocked) {
+        await unpublishResults(selExam);
+        toast.success('Results unpublished — marks can be edited again');
+      } else {
+        await publishResults(selExam);
+        toast.success('Results published and locked');
+      }
+      await refreshExams();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Action failed');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
   const openReportCard = async (studentId) => {
     try {
       const res = await getStudentReportCard(selExam, studentId);
-      // axios interceptor doesn't unwrap object data, so access res.data.data
       const payload = res.data?.data ?? res.data;
       setReportCard(payload);
       setReportOpen(true);
@@ -858,14 +1020,24 @@ function ResultsTab() {
 
   return (
     <div className="space-y-5">
-      {/* Selectors + Calculate */}
+      {/* Selectors + Actions */}
       <div className="flex flex-wrap items-end gap-4">
         <ExamSelect  value={selExam}  onChange={setSelExam}  exams={exams}    label="Select Exam" />
         <ClassSelect value={selClass} onChange={setSelClass} classes={classes} label="Select Class" />
-        <Button loading={calculating} onClick={handleCalculate}
-          style={{ background: 'linear-gradient(135deg,#10b981,#14b8a6)' }}>
-          <Calculator size={14} /> Calculate Results
-        </Button>
+        {isAdmin && (
+          <Button loading={calculating} onClick={handleCalculate} disabled={isLocked}
+            style={{ background: isLocked ? undefined : 'linear-gradient(135deg,#10b981,#14b8a6)' }}>
+            <Calculator size={14} /> Calculate Results
+          </Button>
+        )}
+        {isAdmin && selExam && results.length > 0 && (
+          <Button loading={publishing} onClick={handlePublish}
+            style={{ background: isLocked
+              ? 'linear-gradient(135deg,#f59e0b,#f97316)'
+              : 'linear-gradient(135deg,#10b981,#059669)' }}>
+            {isLocked ? <><Unlock size={14} /> Unpublish</> : <><Lock size={14} /> Publish Results</>}
+          </Button>
+        )}
         {results.length > 0 && selExam && selClass && (
           <Button
             onClick={() => {
@@ -877,6 +1049,22 @@ function ResultsTab() {
           </Button>
         )}
       </div>
+
+      {/* Published banner */}
+      {isLocked && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 text-sm text-emerald-700 dark:text-emerald-400">
+          <Lock size={15} className="shrink-0" />
+          <div>
+            <span className="font-semibold">Results published & locked</span>
+            <span className="ml-2 text-emerald-600 dark:text-emerald-500 text-xs">
+              Published {new Date(selectedExamObj.results_published_at).toLocaleString('en-PK')}
+            </span>
+          </div>
+          {isAdmin && (
+            <span className="ml-auto text-xs opacity-70">Click Unpublish to allow edits</span>
+          )}
+        </div>
+      )}
 
       {(!selExam || !selClass) ? (
         <EmptyBox icon={BarChart3} message="Select an exam and class to view results." />
@@ -1062,28 +1250,43 @@ function ReportCardModal({ data, onClose }) {
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
               {subjects.map((s, i) => (
-                <tr key={i} className={s.subject_status === 'fail' ? 'bg-red-50/40 dark:bg-red-900/10' : ''}>
+                <tr key={i} className={
+                  s.subject_status === 'absent' ? 'bg-slate-50/60 dark:bg-slate-700/20' :
+                  s.subject_status === 'fail'   ? 'bg-red-50/40 dark:bg-red-900/10' : ''
+                }>
                   <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-200">
                     {s.subject_name}
                     {s.subject_code && <span className="ml-1 text-xs text-slate-400">({s.subject_code})</span>}
                   </td>
                   <td className="px-4 py-3 text-slate-500">{s.total_marks}</td>
                   <td className="px-4 py-3 text-slate-500">{s.passing_marks}</td>
-                  <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">{s.obtained_marks}</td>
-                  <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{s.subject_percentage}%</td>
-                  <td className="px-4 py-3">
-                    <GradeBadge grade={s.subject_grade} />
+                  <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">
+                    {s.is_absent
+                      ? <span className="font-bold text-slate-500 dark:text-slate-400">AB</span>
+                      : s.obtained_marks}
+                  </td>
+                  <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
+                    {s.is_absent ? '—' : `${s.subject_percentage}%`}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={[
-                      'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border capitalize',
-                      s.subject_status === 'pass'
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800/40'
-                        : 'bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800/40',
-                    ].join(' ')}>
-                      {s.subject_status === 'pass' ? <Check size={9} className="mr-0.5" /> : <X size={9} className="mr-0.5" />}
-                      {s.subject_status}
-                    </span>
+                    {s.is_absent ? '—' : <GradeBadge grade={s.subject_grade} />}
+                  </td>
+                  <td className="px-4 py-3">
+                    {s.subject_status === 'absent' ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-700 dark:text-slate-400 dark:border-slate-600">
+                        Absent
+                      </span>
+                    ) : (
+                      <span className={[
+                        'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border capitalize',
+                        s.subject_status === 'pass'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800/40'
+                          : 'bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800/40',
+                      ].join(' ')}>
+                        {s.subject_status === 'pass' ? <Check size={9} className="mr-0.5" /> : <X size={9} className="mr-0.5" />}
+                        {s.subject_status}
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -1091,12 +1294,14 @@ function ReportCardModal({ data, onClose }) {
           </table>
         </div>
 
-        {subjects.some(s => s.remarks) && (
+        {subjects.some(s => s.remarks || s.is_absent) && (
           <div className="space-y-2">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Remarks</p>
-            {subjects.filter(s => s.remarks).map((s, i) => (
+            {subjects.filter(s => s.remarks || s.is_absent).map((s, i) => (
               <p key={i} className="text-sm text-slate-600 dark:text-slate-300">
-                <span className="font-medium">{s.subject_name}:</span> {s.remarks}
+                <span className="font-medium">{s.subject_name}:</span>{' '}
+                {s.is_absent && <span className="inline-flex items-center mr-1 px-1.5 py-0 rounded text-[10px] font-bold bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-400">AB</span>}
+                {s.remarks || (s.is_absent ? 'Student was absent' : '')}
               </p>
             ))}
           </div>
@@ -1118,5 +1323,841 @@ function ReportCardModal({ data, onClose }) {
         </div>
       </div>
     </Modal>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+//  TAB 5 — Paper Creator
+// ─────────────────────────────────────────────────────────────
+const SECTION_META = {
+  mcq:   { label: 'Section A — MCQs',             color: '#6366f1', bg: '#eef2ff' },
+  short: { label: 'Section B — Short Questions',  color: '#0ea5e9', bg: '#f0f9ff' },
+  long:  { label: 'Section C — Long Questions',   color: '#10b981', bg: '#f0fdf4' },
+};
+
+const BLANK_PAPER = { title: '', subject: '', class_name: '', exam_id: '', academic_year: '2025-26', total_marks: 100, duration_mins: 180, paper_date: '', instructions: '', note: '', teacher_id: '' };
+
+// Shared input/select className used throughout the tab
+const INPUT_CLS = 'w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-orange-400/30';
+
+function PaperCreatorTab() {
+  const { user }                          = useAuth();
+  const isAdmin                           = user?.role === 'admin';
+  const [papers,        setPapers]        = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [selected,      setSelected]      = useState(null);
+  const [newForm,       setNewForm]       = useState(BLANK_PAPER);
+  const [showNew,       setShowNew]       = useState(false);
+  const [saving,        setSaving]        = useState(false);
+  const [metaEdit,      setMetaEdit]      = useState(false);
+  const [metaForm,      setMetaForm]      = useState({});
+  const [collapsed,     setCollapsed]     = useState({});
+  const [classes,       setClasses]       = useState([]);
+  const [subjects,      setSubjects]      = useState([]);
+  const [teachers,      setTeachers]      = useState([]);
+  const [exams,         setExams]         = useState([]);
+  // Exam config fetched when exam+class+subject are selected in the form
+  const [newFormConfig,  setNewFormConfig]  = useState(null); // { total_marks, passing_marks } from exam_subjects
+  const [metaFormConfig, setMetaFormConfig] = useState(null);
+  const [selectedConfig, setSelectedConfig] = useState(null); // for the open paper's linked exam
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [papersRes, classesRes, subjectsRes, examsRes] = await Promise.all([
+        getPapers(),
+        getClasses({ limit: 200 }),
+        getSubjects(),
+        getExams({ limit: 200 }),
+      ]);
+      setPapers(Array.isArray(papersRes.data) ? papersRes.data : []);
+      setClasses(Array.isArray(classesRes.data) ? classesRes.data : []);
+      setSubjects(Array.isArray(subjectsRes.data) ? subjectsRes.data : []);
+      setExams(Array.isArray(examsRes.data) ? examsRes.data : []);
+      if (isAdmin) {
+        const tr = await getTeacherUsers();
+        setTeachers(Array.isArray(tr.data) ? tr.data : []);
+      }
+    } catch { toast.error('Failed to load papers'); }
+    finally { setLoading(false); }
+  }, [isAdmin]);
+
+  // Helper: given an exam_id, class_name, subject → fetch exam_subjects config
+  const fetchConfig = useCallback(async (examId, className, subjectName) => {
+    if (!examId || !className || !subjectName) return null;
+    const cls = classes.find(c => c.name === className);
+    if (!cls) return null;
+    try {
+      const r = await getExamSubjects(examId, { class_id: cls.id });
+      const rows = Array.isArray(r.data) ? r.data : [];
+      const match = rows.find(row => row.subject_name?.toLowerCase() === subjectName.toLowerCase());
+      return match ? { total_marks: Number(match.total_marks), passing_marks: Number(match.passing_marks) } : null;
+    } catch { return null; }
+  }, [classes]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Auto-fetch exam config whenever new-form exam+class+subject change
+  useEffect(() => {
+    let active = true;
+    fetchConfig(newForm.exam_id, newForm.class_name, newForm.subject)
+      .then(cfg => { if (active) setNewFormConfig(cfg); });
+    return () => { active = false; };
+  }, [newForm.exam_id, newForm.class_name, newForm.subject, fetchConfig]);
+
+  // Auto-fetch exam config for meta-edit form
+  useEffect(() => {
+    if (!metaEdit) return;
+    let active = true;
+    fetchConfig(metaForm.exam_id, metaForm.class_name, metaForm.subject)
+      .then(cfg => { if (active) setMetaFormConfig(cfg); });
+    return () => { active = false; };
+  }, [metaForm.exam_id, metaForm.class_name, metaForm.subject, metaEdit, fetchConfig]);
+
+  // When a paper is selected, fetch config for its linked exam
+  useEffect(() => {
+    if (!selected?.exam_id) { setSelectedConfig(null); return; }
+    let active = true;
+    fetchConfig(selected.exam_id, selected.class_name, selected.subject)
+      .then(cfg => { if (active) setSelectedConfig(cfg); });
+    return () => { active = false; };
+  }, [selected?.exam_id, selected?.class_name, selected?.subject, fetchConfig]);
+
+  const handleCreate = async () => {
+    if (!newForm.title.trim()) { toast.error('Title is required'); return; }
+    setSaving(true);
+    try {
+      const payload = { ...newForm };
+      if (payload.teacher_id) { payload.teacher_user_id = payload.teacher_id; }
+      delete payload.teacher_id;
+      if (!payload.exam_id) delete payload.exam_id;
+      const r = await createPaper(payload);
+      const paper = r.data?.data ?? r.data;
+      await load();
+      setSelected(paper);
+      setShowNew(false);
+      setNewForm(BLANK_PAPER);
+      setNewFormConfig(null);
+      toast.success('Paper created with 3 sections');
+    } catch (e) { toast.error(e?.response?.data?.message || 'Failed to create'); }
+    finally { setSaving(false); }
+  };
+
+  const handleSaveMeta = async () => {
+    setSaving(true);
+    try {
+      const payload = { ...metaForm };
+      if (!payload.exam_id) payload.exam_id = null;
+      const r = await updatePaper(selected.id, payload);
+      const updated = r.data?.data ?? r.data;
+      setSelected(updated);
+      setPapers(p => p.map(x => x.id === updated.id ? { ...x, ...updated } : x));
+      setMetaEdit(false);
+      setMetaFormConfig(null);
+      toast.success('Paper updated');
+    } catch { toast.error('Failed to update'); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async (paperId) => {
+    if (!confirm('Delete this paper and all its questions?')) return;
+    try {
+      await deletePaper(paperId);
+      setPapers(p => p.filter(x => x.id !== paperId));
+      if (selected?.id === paperId) setSelected(null);
+      toast.success('Paper deleted');
+    } catch { toast.error('Failed to delete'); }
+  };
+
+  const refresh = (updated) => { if (updated) setSelected(updated.data ?? updated); };
+  const toggleCollapse = (id) => setCollapsed(c => ({ ...c, [id]: !c[id] }));
+  const sectionMarks = (sec) => sec.questions?.reduce((sum, q) => {
+    if (sec.section_type === 'long' && q.sub_parts?.length)
+      return sum + q.sub_parts.reduce((s, p) => s + Number(p.marks || 0), 0);
+    return sum + Number(q.marks || 0);
+  }, 0) || 0;
+
+  return (
+    <div className="flex gap-5 min-h-[600px]">
+      {/* ── Left: paper list ── */}
+      <div className="w-72 shrink-0 space-y-2">
+        <button onClick={() => setShowNew(v => !v)}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-sm font-bold shadow"
+          style={{ background: 'linear-gradient(135deg,#f59e0b,#f97316)' }}>
+          <Plus size={15} /> New Paper
+        </button>
+
+        {showNew && (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 space-y-3 shadow-sm">
+            <p className="text-xs font-bold text-orange-600 uppercase tracking-wide">New Paper</p>
+
+            {/* Title */}
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Paper Title *</label>
+              <input type="text" value={newForm.title} placeholder="e.g. Annual Exam Mathematics"
+                onChange={e => setNewForm(f => ({ ...f, title: e.target.value }))}
+                className={INPUT_CLS} />
+            </div>
+
+            {/* Link to Exam */}
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Link to Exam <span className="normal-case text-slate-400">(optional)</span></label>
+              <select value={newForm.exam_id} onChange={e => setNewForm(f => ({ ...f, exam_id: e.target.value }))} className={INPUT_CLS}>
+                <option value="">— Not linked —</option>
+                {exams.map(e => <option key={e.id} value={e.id}>{e.exam_name} ({e.academic_year})</option>)}
+              </select>
+            </div>
+
+            {/* Class dropdown */}
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Class</label>
+              <select value={newForm.class_name} onChange={e => setNewForm(f => ({ ...f, class_name: e.target.value }))} className={INPUT_CLS}>
+                <option value="">— Select Class —</option>
+                {classes.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+              </select>
+            </div>
+
+            {/* Subject dropdown */}
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Subject</label>
+              <select value={newForm.subject} onChange={e => setNewForm(f => ({ ...f, subject: e.target.value }))} className={INPUT_CLS}>
+                <option value="">— Select Subject —</option>
+                {subjects.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+              </select>
+            </div>
+
+            {/* Exam config info box — shown when exam+class+subject are all selected */}
+            {newForm.exam_id && newForm.class_name && newForm.subject && (
+              <div className={`rounded-lg border px-3 py-2.5 text-xs ${
+                newFormConfig
+                  ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-700'
+                  : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700'
+              }`}>
+                {newFormConfig ? (
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                      <Link2 size={11} />
+                      <span className="font-semibold">Exam config found:</span>
+                      <span className="font-bold">{newFormConfig.total_marks} marks</span>
+                      <span className="text-emerald-600/70 dark:text-emerald-500/70">· passing {newFormConfig.passing_marks}</span>
+                    </div>
+                    {Number(newForm.total_marks) !== newFormConfig.total_marks && (
+                      <button onClick={() => setNewForm(f => ({ ...f, total_marks: newFormConfig.total_marks }))}
+                        className="shrink-0 px-2 py-0.5 rounded bg-emerald-600 text-white font-semibold text-[10px] hover:bg-emerald-700 transition-colors">
+                        Sync
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
+                    <AlertTriangle size={11} />
+                    <span>No marks config found for this exam + class + subject. Set it up in <strong>Marks Config</strong> tab first.</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Teacher dropdown — admin only */}
+            {isAdmin ? (
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Assign to Teacher</label>
+                <select value={newForm.teacher_id} onChange={e => setNewForm(f => ({ ...f, teacher_id: e.target.value }))} className={INPUT_CLS}>
+                  <option value="">— Self (Admin) —</option>
+                  {teachers.map(t => (
+                    <option key={t.id} value={t.id}>{t.display_name}{t.subject ? ` — ${t.subject}` : ''}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Teacher</label>
+                <div className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-sm text-slate-500">
+                  {user?.name || 'You'} (assigned automatically)
+                </div>
+              </div>
+            )}
+
+            {/* Academic year + marks + duration */}
+            {[
+              ['academic_year', 'Academic Year',      'text',   '2025-26'],
+              ['total_marks',   'Total Marks',        'number', '100'],
+              ['duration_mins', 'Duration (minutes)', 'number', '180'],
+            ].map(([k, lbl, type, ph]) => (
+              <div key={k}>
+                <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">{lbl}</label>
+                <input type={type} value={newForm[k]} placeholder={ph}
+                  onChange={e => setNewForm(f => ({ ...f, [k]: e.target.value }))}
+                  className={INPUT_CLS} />
+              </div>
+            ))}
+
+            <div className="flex gap-2">
+              <button onClick={handleCreate} disabled={saving}
+                className="flex-1 py-2 rounded-lg text-white text-sm font-semibold"
+                style={{ background: 'linear-gradient(135deg,#f59e0b,#f97316)' }}>
+                {saving ? 'Creating…' : 'Create'}
+              </button>
+              <button onClick={() => { setShowNew(false); setNewFormConfig(null); }}
+                className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 text-sm">
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="flex items-center justify-center py-12"><Loader2 size={20} className="animate-spin text-slate-400" /></div>
+        ) : papers.length === 0 ? (
+          <div className="text-center py-12 text-slate-400 text-sm">No papers yet.</div>
+        ) : papers.map(p => (
+          <button key={p.id} onClick={() => { setSelected(null); setTimeout(() => setSelected(p), 0); setMetaEdit(false); }}
+            className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${
+              selected?.id === p.id
+                ? 'border-orange-400 bg-orange-50 dark:bg-orange-900/20 shadow-sm'
+                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-orange-300'
+            }`}>
+            <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{p.title}</p>
+            <p className="text-xs text-slate-500 mt-0.5">{p.subject || '—'} · {p.class_name || '—'}</p>
+            <div className="flex items-center justify-between mt-1.5">
+              <span className="text-[10px] text-slate-400">{p.academic_year}</span>
+              <span className="text-[10px] font-semibold text-orange-600">{p.total_marks} marks</span>
+            </div>
+            {p.exam_name && (
+              <p className="text-[10px] text-indigo-500 mt-0.5 flex items-center gap-0.5 truncate">
+                <Link2 size={8} className="shrink-0" /> {p.exam_name}
+              </p>
+            )}
+            {isAdmin && p.created_by_name && (
+              <p className="text-[10px] text-slate-400 mt-0.5 truncate">by {p.created_by_name}</p>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Right: editor ── */}
+      {!selected ? (
+        <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-3">
+          <FileEdit size={40} className="opacity-30" />
+          <p className="text-sm">Select a paper or create a new one</p>
+        </div>
+      ) : (
+        <div className="flex-1 min-w-0 space-y-4">
+          {/* Paper meta card */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-base font-bold text-slate-800 dark:text-slate-100 truncate">{selected.title}</h2>
+                  {selected.exam_id && (() => {
+                    const linkedExam = exams.find(e => String(e.id) === String(selected.exam_id));
+                    return linkedExam ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700 shrink-0">
+                        <Link2 size={9} /> {linkedExam.exam_name}
+                      </span>
+                    ) : null;
+                  })()}
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {selected.subject || '—'} · {selected.class_name || '—'} · {selected.academic_year} · {selected.total_marks} marks · {Math.floor(selected.duration_mins / 60)}h{selected.duration_mins % 60 > 0 ? ` ${selected.duration_mins % 60}m` : ''}
+                  {isAdmin && selected.created_by_name ? ` · by ${selected.created_by_name}` : ''}
+                </p>
+                {/* ── Sync warnings ── */}
+                {(() => {
+                  const computedTotal = selected.sections?.reduce((sum, sec) => sum + (sec.questions?.reduce((s, q) => {
+                    if (sec.section_type === 'long' && q.sub_parts?.length)
+                      return s + q.sub_parts.reduce((ps, p) => ps + Number(p.marks || 0), 0);
+                    return s + Number(q.marks || 0);
+                  }, 0) || 0), 0) || 0;
+                  const paperTotal = Number(selected.total_marks);
+                  const examTotal  = selectedConfig?.total_marks;
+                  const examPass   = selectedConfig?.passing_marks;
+                  const examMismatch   = examTotal  != null && examTotal  !== paperTotal;
+                  const computedMismatch = computedTotal > 0 && computedTotal !== paperTotal;
+                  if (!examMismatch && !computedMismatch && !selectedConfig) return null;
+                  return (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {selectedConfig && !examMismatch && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle size={10} /> Synced with exam ({examTotal} marks · passing {examPass})
+                        </span>
+                      )}
+                      {examMismatch && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-600 dark:text-red-400">
+                          <AlertTriangle size={10} /> Exam config: {examTotal} marks — paper says {paperTotal}
+                        </span>
+                      )}
+                      {computedMismatch && (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-amber-600 dark:text-amber-400">
+                          <AlertTriangle size={10} /> Questions total: {computedTotal} — paper header: {paperTotal}
+                          <button
+                            type="button"
+                            onClick={() => handleSaveMeta({ ...selected, total_marks: computedTotal })}
+                            className="ml-1 px-1.5 py-0 rounded bg-amber-200 dark:bg-amber-700 text-amber-800 dark:text-amber-200 hover:bg-amber-300 transition-colors font-bold text-[9px] uppercase tracking-wide"
+                            title={`Set paper total to ${computedTotal}`}
+                          >
+                            Fix →{computedTotal}
+                          </button>
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button onClick={() => window.open(`/exams/papers/${selected.id}/print`, '_blank')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-semibold"
+                  style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
+                  <Printer size={13} /> Print Preview
+                </button>
+                <button onClick={() => { setMetaEdit(v => !v); setMetaForm({ title: selected.title, subject: selected.subject, class_name: selected.class_name, exam_id: selected.exam_id || '', academic_year: selected.academic_year, total_marks: selected.total_marks, duration_mins: selected.duration_mins, paper_date: selected.paper_date?.split('T')[0] || '', instructions: selected.instructions || '', note: selected.note || '' }); setMetaFormConfig(null); }}
+                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-indigo-500 transition-colors">
+                  <Pencil size={14} />
+                </button>
+                <button onClick={() => handleDelete(selected.id)}
+                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-red-500 transition-colors">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+            {metaEdit && (
+              <div className="p-5 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {/* Title */}
+                <div className="col-span-full sm:col-span-1">
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Title</label>
+                  <input type="text" value={metaForm.title ?? ''} onChange={e => setMetaForm(f => ({ ...f, title: e.target.value }))} className={INPUT_CLS} />
+                </div>
+                {/* Class dropdown */}
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Class</label>
+                  <select value={metaForm.class_name ?? ''} onChange={e => setMetaForm(f => ({ ...f, class_name: e.target.value }))} className={INPUT_CLS}>
+                    <option value="">— Select Class —</option>
+                    {classes.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                  </select>
+                </div>
+                {/* Subject dropdown */}
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Subject</label>
+                  <select value={metaForm.subject ?? ''} onChange={e => setMetaForm(f => ({ ...f, subject: e.target.value }))} className={INPUT_CLS}>
+                    <option value="">— Select Subject —</option>
+                    {subjects.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                  </select>
+                </div>
+                {/* Link to Exam */}
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Link to Exam</label>
+                  <select value={metaForm.exam_id ?? ''} onChange={e => setMetaForm(f => ({ ...f, exam_id: e.target.value }))} className={INPUT_CLS}>
+                    <option value="">— Not linked —</option>
+                    {exams.map(e => <option key={e.id} value={e.id}>{e.exam_name} ({e.academic_year})</option>)}
+                  </select>
+                </div>
+                {/* Exam config info box */}
+                {metaForm.exam_id && metaForm.class_name && metaForm.subject && (
+                  <div className={`col-span-full rounded-lg border px-3 py-2 text-xs ${
+                    metaFormConfig
+                      ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-700'
+                      : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700'
+                  }`}>
+                    {metaFormConfig ? (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                          <Link2 size={11} />
+                          <span className="font-semibold">Exam config:</span>
+                          <span className="font-bold">{metaFormConfig.total_marks} marks total</span>
+                          <span className="opacity-70">· passing {metaFormConfig.passing_marks}</span>
+                        </div>
+                        {Number(metaForm.total_marks) !== metaFormConfig.total_marks && (
+                          <button onClick={() => setMetaForm(f => ({ ...f, total_marks: metaFormConfig.total_marks }))}
+                            className="px-2 py-0.5 rounded bg-emerald-600 text-white font-semibold text-[10px] hover:bg-emerald-700 transition-colors">
+                            Sync marks
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
+                        <AlertTriangle size={11} />
+                        <span>No marks config found for this exam + class + subject.</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Remaining fields */}
+                {[
+                  ['academic_year', 'Academic Year',   'text'],
+                  ['total_marks',   'Total Marks',     'number'],
+                  ['duration_mins', 'Duration (mins)', 'number'],
+                  ['paper_date',    'Date',            'date'],
+                ].map(([k, lbl, type]) => (
+                  <div key={k}>
+                    <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">{lbl}</label>
+                    <input type={type} value={metaForm[k] ?? ''} onChange={e => setMetaForm(f => ({ ...f, [k]: e.target.value }))} className={INPUT_CLS} />
+                  </div>
+                ))}
+                <div className="col-span-full">
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">General Instructions</label>
+                  <textarea rows={2} value={metaForm.instructions ?? ''} onChange={e => setMetaForm(f => ({ ...f, instructions: e.target.value }))}
+                    placeholder="e.g. All questions are compulsory. Write clearly."
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-400/30" />
+                </div>
+                <div className="col-span-full">
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Footer Note</label>
+                  <input type="text" value={metaForm.note ?? ''} onChange={e => setMetaForm(f => ({ ...f, note: e.target.value }))}
+                    placeholder="e.g. Good Luck!"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/30" />
+                </div>
+                <div className="col-span-full flex gap-2">
+                  <button onClick={handleSaveMeta} disabled={saving}
+                    className="px-5 py-2 rounded-lg text-white text-sm font-semibold"
+                    style={{ background: 'linear-gradient(135deg,#f59e0b,#f97316)' }}>
+                    {saving ? 'Saving…' : 'Save Changes'}
+                  </button>
+                  <button onClick={() => setMetaEdit(false)}
+                    className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 text-sm">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Sections */}
+          {selected.sections?.map(sec => (
+            <SectionEditor key={sec.id} section={sec} collapsed={!!collapsed[sec.id]}
+              onToggle={() => toggleCollapse(sec.id)} sectionMarks={sectionMarks(sec)} onRefresh={refresh} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Section editor ──────────────────────────────────────────── */
+function SectionEditor({ section, collapsed, onToggle, sectionMarks, onRefresh }) {
+  const meta = SECTION_META[section.section_type] || SECTION_META.short;
+  const [secForm, setSecForm] = useState({ title: section.title, instructions: section.instructions || '', marks_per_q: section.marks_per_q });
+  const [secEdit, setSecEdit] = useState(false);
+  const [saving,  setSaving]  = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+
+  const handleSaveSection = async () => {
+    setSaving(true);
+    try {
+      const r = await updateSection(section.id, secForm);
+      onRefresh(r.data?.data ?? r.data);
+      setSecEdit(false);
+      toast.success('Section updated');
+    } catch { toast.error('Failed to update section'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-3.5" style={{ borderLeft: `4px solid ${meta.color}`, background: meta.bg }}>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold" style={{ color: meta.color }}>{section.title}</p>
+          <p className="text-[11px] text-slate-500 mt-0.5">{section.questions?.length || 0} questions · {sectionMarks} marks total</p>
+        </div>
+        <button onClick={() => { setSecEdit(v => !v); setSecForm({ title: section.title, instructions: section.instructions || '', marks_per_q: section.marks_per_q }); }}
+          className="p-1.5 rounded-lg hover:bg-white/60 text-slate-500 transition-colors"><Pencil size={13} /></button>
+        <button onClick={onToggle} className="p-1.5 rounded-lg hover:bg-white/60 text-slate-500 transition-colors">
+          {collapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
+        </button>
+      </div>
+
+      {!collapsed && (
+        <div className="p-5 space-y-4">
+          {secEdit && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+              <div className="sm:col-span-2">
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Section Title</label>
+                <input value={secForm.title} onChange={e => setSecForm(f => ({ ...f, title: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/30" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Section Instructions</label>
+                <input value={secForm.instructions} onChange={e => setSecForm(f => ({ ...f, instructions: e.target.value }))}
+                  placeholder="e.g. Attempt any 6 of the following."
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/30" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Default Marks/Question</label>
+                <input type="number" value={secForm.marks_per_q} onChange={e => setSecForm(f => ({ ...f, marks_per_q: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/30" />
+              </div>
+              <div className="flex items-end gap-2">
+                <button onClick={handleSaveSection} disabled={saving}
+                  className="px-4 py-2 rounded-lg text-white text-sm font-semibold" style={{ background: meta.color }}>
+                  {saving ? 'Saving…' : 'Save'}
+                </button>
+                <button onClick={() => setSecEdit(false)}
+                  className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 text-sm">Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {section.questions?.length === 0 && !addOpen && (
+            <p className="text-sm text-slate-400 text-center py-4">No questions yet. Add one below.</p>
+          )}
+          {section.questions?.map((q, qi) => (
+            <QuestionRow key={q.id} question={q} index={qi} sectionType={section.section_type}
+              accentColor={meta.color} onRefresh={onRefresh} />
+          ))}
+
+          {addOpen ? (
+            <AddQuestionForm section={section} defaultMarks={section.marks_per_q || 1}
+              accentColor={meta.color}
+              onRefresh={(u) => { onRefresh(u); setAddOpen(false); }}
+              onCancel={() => setAddOpen(false)} />
+          ) : (
+            <button onClick={() => setAddOpen(true)}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed text-sm font-semibold transition-colors"
+              style={{ borderColor: meta.color, color: meta.color }}>
+              <Plus size={15} /> Add Question
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Question row ────────────────────────────────────────────── */
+const ROMAN_UI = ['i','ii','iii','iv','v','vi','vii','viii','ix','x','xi','xii','xiii','xiv','xv'];
+
+function QuestionRow({ question: q, index, sectionType, accentColor, onRefresh }) {
+  const [editing, setEditing] = useState(false);
+  const [saving,  setSaving]  = useState(false);
+  const [form,    setForm]    = useState(null);
+
+  const startEdit = () => {
+    setForm({
+      question_text: q.question_text,
+      marks: q.marks,
+      options: q.options ? JSON.parse(JSON.stringify(q.options)) : [
+        { label: 'A', text: '' }, { label: 'B', text: '' },
+        { label: 'C', text: '' }, { label: 'D', text: '' },
+      ],
+      sub_parts: q.sub_parts ? JSON.parse(JSON.stringify(q.sub_parts)) : [],
+    });
+    setEditing(true);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const payload = { question_text: form.question_text, marks: form.marks };
+      if (sectionType === 'mcq')  payload.options    = form.options;
+      if (sectionType === 'long') payload.sub_parts  = form.sub_parts;
+      const r = await updateQuestion(q.id, payload);
+      onRefresh(r.data?.data ?? r.data);
+      setEditing(false);
+      toast.success('Question saved');
+    } catch { toast.error('Failed to save'); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm('Delete this question?')) return;
+    try {
+      const r = await deleteQuestion(q.id);
+      onRefresh(r.data?.data ?? r.data);
+    } catch { toast.error('Failed to delete'); }
+  };
+
+  const qLabel = sectionType === 'short' ? `${ROMAN_UI[index] || index + 1}.` : `${index + 1}.`;
+
+  if (!editing) return (
+    <div className="group flex gap-3 p-3 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
+      <span className="text-xs font-bold text-slate-400 pt-0.5 w-7 shrink-0">{qLabel}</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-slate-800 dark:text-slate-100">{q.question_text}</p>
+        {sectionType === 'mcq' && q.options?.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 mt-2">
+            {q.options.map(o => (
+              <span key={o.label} className="text-xs text-slate-500">
+                <span className="font-bold mr-1">({o.label})</span>{o.text || <em className="opacity-40">empty</em>}
+              </span>
+            ))}
+          </div>
+        )}
+        {sectionType === 'long' && q.sub_parts?.length > 0 && (
+          <div className="mt-2 space-y-1">
+            {q.sub_parts.map((sp, si) => (
+              <div key={si} className="flex items-baseline gap-2 text-xs text-slate-600 dark:text-slate-300">
+                <span className="font-bold">({sp.label || String.fromCharCode(97 + si)})</span>
+                <span className="flex-1">{sp.text}</span>
+                <span className="font-semibold text-slate-400">({sp.marks}m)</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="flex items-start gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white mt-0.5" style={{ background: accentColor }}>{q.marks}m</span>
+        <button onClick={startEdit} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-indigo-500"><Pencil size={13} /></button>
+        <button onClick={handleDelete} className="p-1 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500"><Trash2 size={13} /></button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="p-4 rounded-xl border-2 space-y-3" style={{ borderColor: accentColor }}>
+      <div>
+        <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Question Text</label>
+        <textarea rows={2} value={form.question_text} onChange={e => setForm(f => ({ ...f, question_text: e.target.value }))}
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-400/30" />
+      </div>
+      {sectionType !== 'long' && (
+        <div className="w-28">
+          <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Marks</label>
+          <input type="number" value={form.marks} onChange={e => setForm(f => ({ ...f, marks: e.target.value }))}
+            className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/30" />
+        </div>
+      )}
+      {sectionType === 'mcq' && (
+        <div>
+          <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-2">Options</label>
+          <div className="grid grid-cols-2 gap-2">
+            {form.options.map((o, oi) => (
+              <div key={oi} className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-500 w-5">({o.label})</span>
+                <input value={o.text} onChange={e => setForm(f => { const opts = [...f.options]; opts[oi] = { ...opts[oi], text: e.target.value }; return { ...f, options: opts }; })}
+                  placeholder={`Option ${o.label}`}
+                  className="flex-1 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/30" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {sectionType === 'long' && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-[10px] font-semibold text-slate-400 uppercase">Sub-parts</label>
+            <button type="button" onClick={() => setForm(f => ({ ...f, sub_parts: [...f.sub_parts, { label: String.fromCharCode(97 + f.sub_parts.length), text: '', marks: 5 }] }))}
+              className="text-xs text-emerald-600 font-semibold flex items-center gap-1"><Plus size={12} /> Add sub-part</button>
+          </div>
+          {form.sub_parts.length === 0 ? (
+            <div className="w-28">
+              <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Marks</label>
+              <input type="number" value={form.marks} onChange={e => setForm(f => ({ ...f, marks: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/30" />
+            </div>
+          ) : form.sub_parts.map((sp, si) => (
+            <div key={si} className="flex items-center gap-2 mb-2">
+              <span className="text-xs font-bold text-slate-500 w-6">({sp.label})</span>
+              <input value={sp.text} onChange={e => setForm(f => { const sps = [...f.sub_parts]; sps[si] = { ...sps[si], text: e.target.value }; return { ...f, sub_parts: sps }; })}
+                placeholder="Sub-part text"
+                className="flex-1 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/30" />
+              <input type="number" value={sp.marks} onChange={e => setForm(f => { const sps = [...f.sub_parts]; sps[si] = { ...sps[si], marks: e.target.value }; return { ...f, sub_parts: sps }; })}
+                className="w-16 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/30" />
+              <button onClick={() => setForm(f => ({ ...f, sub_parts: f.sub_parts.filter((_, i) => i !== si) }))}
+                className="p-1 rounded text-red-400 hover:text-red-600"><Trash2 size={12} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <button onClick={handleSave} disabled={saving}
+          className="px-4 py-2 rounded-lg text-white text-sm font-semibold" style={{ background: accentColor }}>
+          {saving ? 'Saving…' : 'Save Question'}
+        </button>
+        <button onClick={() => setEditing(false)}
+          className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 text-sm">Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+/* ── Add question form ───────────────────────────────────────── */
+function AddQuestionForm({ section, defaultMarks, accentColor, onRefresh, onCancel }) {
+  const isLong = section.section_type === 'long';
+  const isMcq  = section.section_type === 'mcq';
+  const [form, setForm] = useState({
+    question_text: '', marks: defaultMarks,
+    options:   [{ label:'A',text:'' },{ label:'B',text:'' },{ label:'C',text:'' },{ label:'D',text:'' }],
+    sub_parts: [],
+  });
+  const [saving, setSaving] = useState(false);
+
+  const handleAdd = async () => {
+    if (!form.question_text.trim()) { toast.error('Question text is required'); return; }
+    setSaving(true);
+    try {
+      const payload = { question_text: form.question_text, marks: form.marks, sort_order: section.questions?.length || 0 };
+      if (isMcq)  payload.options   = form.options;
+      if (isLong && form.sub_parts.length > 0) payload.sub_parts = form.sub_parts;
+      const r = await addQuestion(section.id, payload);
+      onRefresh(r.data?.data ?? r.data);
+      toast.success('Question added');
+    } catch { toast.error('Failed to add question'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="p-4 rounded-xl border-2 border-dashed space-y-3" style={{ borderColor: accentColor }}>
+      <p className="text-xs font-bold uppercase" style={{ color: accentColor }}>New Question</p>
+      <div>
+        <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Question Text</label>
+        <textarea rows={2} value={form.question_text} onChange={e => setForm(f => ({ ...f, question_text: e.target.value }))}
+          placeholder={isMcq ? 'Which of the following…?' : isLong ? 'Describe in detail…' : 'Define the term…'}
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-400/30" />
+      </div>
+      {!isLong && (
+        <div className="w-28">
+          <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Marks</label>
+          <input type="number" value={form.marks} onChange={e => setForm(f => ({ ...f, marks: e.target.value }))}
+            className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/30" />
+        </div>
+      )}
+      {isMcq && (
+        <div>
+          <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-2">Options</label>
+          <div className="grid grid-cols-2 gap-2">
+            {form.options.map((o, oi) => (
+              <div key={oi} className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-500 w-5">({o.label})</span>
+                <input value={o.text} onChange={e => setForm(f => { const opts=[...f.options]; opts[oi]={...opts[oi],text:e.target.value}; return {...f,options:opts}; })}
+                  placeholder={`Option ${o.label}`}
+                  className="flex-1 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/30" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {isLong && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-[10px] font-semibold text-slate-400 uppercase">Sub-parts (optional)</label>
+            <button type="button" onClick={() => setForm(f => ({ ...f, sub_parts: [...f.sub_parts, { label: String.fromCharCode(97+f.sub_parts.length), text:'', marks:5 }] }))}
+              className="text-xs text-emerald-600 font-semibold flex items-center gap-1"><Plus size={12} /> Add sub-part</button>
+          </div>
+          {form.sub_parts.length === 0 ? (
+            <div className="w-28">
+              <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Total Marks</label>
+              <input type="number" value={form.marks} onChange={e => setForm(f => ({ ...f, marks: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/30" />
+            </div>
+          ) : form.sub_parts.map((sp, si) => (
+            <div key={si} className="flex items-center gap-2 mb-2">
+              <span className="text-xs font-bold text-slate-500 w-6">({sp.label})</span>
+              <input value={sp.text} onChange={e => setForm(f => { const sps=[...f.sub_parts]; sps[si]={...sps[si],text:e.target.value}; return {...f,sub_parts:sps}; })}
+                placeholder="Sub-part text"
+                className="flex-1 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/30" />
+              <input type="number" value={sp.marks} onChange={e => setForm(f => { const sps=[...f.sub_parts]; sps[si]={...sps[si],marks:e.target.value}; return {...f,sub_parts:sps}; })}
+                className="w-16 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/30" />
+              <button onClick={() => setForm(f => ({ ...f, sub_parts: f.sub_parts.filter((_,i)=>i!==si) }))}
+                className="p-1 rounded text-red-400 hover:text-red-600"><Trash2 size={12} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <button onClick={handleAdd} disabled={saving}
+          className="px-5 py-2 rounded-lg text-white text-sm font-semibold" style={{ background: accentColor }}>
+          {saving ? 'Adding…' : 'Add Question'}
+        </button>
+        <button onClick={onCancel}
+          className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 text-sm">Cancel</button>
+      </div>
+    </div>
   );
 }

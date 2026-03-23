@@ -18,6 +18,10 @@ export const getMarks    = (examId, params = {}) => api.get(`/exams/${examId}/ma
 export const submitMarks = (examId, marks)       => api.post(`/exams/${examId}/marks`, { marks });
 export const deleteMark  = (id)                  => api.delete(`/exams/marks/${id}`);
 
+// ── Publish / lock results ─────────────────────────────────
+export const publishResults   = (examId) => api.post(`/exams/${examId}/publish-results`);
+export const unpublishResults = (examId) => api.delete(`/exams/${examId}/publish-results`);
+
 // ── Results ────────────────────────────────────────────────
 export const calculateResults     = (examId)              => api.post(`/exams/${examId}/calculate-results`);
 export const getResults           = (examId, params = {}) => api.get(`/exams/${examId}/results`, { params });

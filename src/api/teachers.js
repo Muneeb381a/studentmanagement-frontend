@@ -48,3 +48,7 @@ export const exportTeachers = (params = {}) =>
 // Soft-delete / restore
 export const getDeletedTeachers = () => api.get('/teachers/deleted');
 export const restoreTeacher     = (id) => api.post(`/teachers/${id}/restore`);
+
+// Credentials
+export const getTeacherCredentials   = (id) => api.get(`/teachers/${id}/credentials`);
+export const resetTeacherCredentials = (id) => api.post(`/teachers/${id}/reset-credentials`);

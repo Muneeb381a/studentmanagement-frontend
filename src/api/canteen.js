@@ -1,0 +1,9 @@
+import api from './axios';
+export const getItems           = ()       => api.get('/canteen/items');
+export const createItem         = (data)   => api.post('/canteen/items', data);
+export const updateItem         = (id, d)  => api.put(`/canteen/items/${id}`, d);
+export const deleteItem         = (id)     => api.delete(`/canteen/items/${id}`);
+export const getSales           = (params) => api.get('/canteen/sales', { params });
+export const createSale         = (data)   => api.post('/canteen/sales', data);
+export const deleteSale         = (id)     => api.delete(`/canteen/sales/${id}`);
+export const getMonthlySalesReport = (params) => api.get('/canteen/sales/monthly-report', { params });

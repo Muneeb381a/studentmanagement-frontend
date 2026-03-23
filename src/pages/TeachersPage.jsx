@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   GraduationCap, Plus, Search, X, Pencil, Trash2, Eye,
   Users, UserCheck, TrendingUp, Mail, Phone, BookOpen, Upload, Download,
+  KeyRound, Copy, Check, Printer, ShieldCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Layout from '../components/layout/Layout';
@@ -16,6 +17,109 @@ import TeacherFormModal from '../components/TeacherFormModal';
 import { getTeachers, createTeacher, updateTeacher, deleteTeacher, getTeacherImportTemplate, importTeachers, exportTeachers } from '../api/teachers';
 import { toPct, formatDate, downloadBlob } from '../utils';
 import { TEACHER_STATUS_STYLES } from '../constants';
+
+// ── Credential reveal card shown once after teacher creation ──
+function CredentialCard({ teacher, credentials, onClose }) {
+  const [copied, setCopied] = useState('');
+
+  const copy = (text, key) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(key);
+      setTimeout(() => setCopied(''), 2000);
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md border border-emerald-200 dark:border-emerald-800 overflow-hidden">
+        {/* Header */}
+        <div className="bg-linear-to-r from-emerald-600 to-teal-500 px-6 py-5 text-white">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+              <ShieldCheck size={20} />
+            </div>
+            <div>
+              <h2 className="font-bold text-base">Teacher Account Created</h2>
+              <p className="text-emerald-100 text-xs mt-0.5">{teacher.full_name}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          {credentials.tempPassword ? (
+            <>
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-3.5 text-sm text-amber-800 dark:text-amber-300">
+                <strong>Important:</strong> Save these credentials now. The password will <strong>not be shown again</strong>.
+              </div>
+
+              {/* Username */}
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Username</p>
+                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3">
+                  <code className="flex-1 font-mono text-sm text-slate-800 dark:text-slate-200 select-all">
+                    {credentials.username}
+                  </code>
+                  <button
+                    onClick={() => copy(credentials.username, 'user')}
+                    className="text-slate-400 hover:text-emerald-600 transition-colors"
+                  >
+                    {copied === 'user' ? <Check size={15} className="text-emerald-500" /> : <Copy size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Password */}
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Temporary Password</p>
+                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3">
+                  <code className="flex-1 font-mono text-sm text-slate-800 dark:text-slate-200 select-all">
+                    {credentials.tempPassword}
+                  </code>
+                  <button
+                    onClick={() => copy(credentials.tempPassword, 'pass')}
+                    className="text-slate-400 hover:text-emerald-600 transition-colors"
+                  >
+                    {copied === 'pass' ? <Check size={15} className="text-emerald-500" /> : <Copy size={15} />}
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4 text-sm text-emerald-800 dark:text-emerald-300 flex items-start gap-3">
+              <Mail size={16} className="shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold">Credentials sent by email</p>
+                <p className="mt-0.5 text-emerald-700 dark:text-emerald-400">{credentials.note}</p>
+                <p className="mt-1.5 font-mono text-xs bg-emerald-100 dark:bg-emerald-900/40 px-2 py-1 rounded inline-block">
+                  {credentials.username}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {credentials.note && credentials.tempPassword && (
+            <p className="text-xs text-slate-400">{credentials.note}</p>
+          )}
+        </div>
+
+        <div className="flex gap-3 px-6 pb-6">
+          <button
+            onClick={() => window.open(`/teachers/${teacher.id}/print`, '_blank')}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+          >
+            <Printer size={14} /> Print Profile
+          </button>
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* ── Teacher card ── */
 function TeacherCard({ teacher, onEdit, onDelete, onView }) {
@@ -118,6 +222,7 @@ export default function TeachersPage() {
   const [editTarget,   setEditTarget]   = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [showImport,   setShowImport]   = useState(false);
+  const [newCredentials, setNewCredentials] = useState(null); // { teacher, credentials }
 
   const fetchTeachers = useCallback(async () => {
     setLoading(true);
@@ -133,9 +238,21 @@ export default function TeachersPage() {
   const handleSubmit = async (form) => {
     try {
       let r;
-      if (editTarget) { r = await updateTeacher(editTarget.id, form); toast.success('Teacher updated'); }
-      else            { r = await createTeacher(form);                 toast.success('Teacher added');   }
-      setModalOpen(false); setEditTarget(null); fetchTeachers();
+      if (editTarget) {
+        r = await updateTeacher(editTarget.id, form);
+        toast.success('Teacher updated');
+        setModalOpen(false); setEditTarget(null); fetchTeachers();
+      } else {
+        r = await createTeacher(form);
+        const teacher     = r.data?.data ?? r.data;
+        const credentials = r.data?.credentials;
+        setModalOpen(false); setEditTarget(null); fetchTeachers();
+        if (credentials) {
+          setNewCredentials({ teacher, credentials });
+        } else {
+          toast.success('Teacher added');
+        }
+      }
       return r.data?.data ?? r.data;
     } catch (err) { toast.error(err.displayMessage || 'Something went wrong'); throw err; }
   };
@@ -305,6 +422,14 @@ export default function TeachersPage() {
         templateName="teachers_template.csv"
         description="Upload a CSV with columns: full_name, gender, email, phone, subject, qualification, join_date, salary, status"
       />
+
+      {newCredentials && (
+        <CredentialCard
+          teacher={newCredentials.teacher}
+          credentials={newCredentials.credentials}
+          onClose={() => setNewCredentials(null)}
+        />
+      )}
     </Layout>
   );
 }

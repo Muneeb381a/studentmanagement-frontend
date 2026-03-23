@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Users, UserCheck, TrendingUp, Filter, X, Pencil, Trash2, Mail, Phone, CreditCard, ArrowUpCircle, FileText, BarChart2, Printer, Upload, Download } from 'lucide-react';
+import { Plus, Search, Users, UserCheck, TrendingUp, Filter, X, Pencil, Trash2, Mail, Phone, CreditCard, ArrowUpCircle, FileText, BarChart2, Printer, Upload, Download, KeyRound, Copy, Check, ShieldCheck, AlertTriangle, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Layout from '../components/layout/Layout';
 import { StatCard } from '../components/ui/Card';
@@ -15,6 +15,114 @@ import { getStudents, deleteStudent, resetStudentCredentials, promoteStudents, g
 import { getClasses } from '../api/classes';
 import { useDebounce } from '../hooks/useDebounce';
 import { formatDate, toPct, downloadBlob } from '../utils';
+
+/* ── Student Credential Reveal Modal ── */
+function StudentCredentialModal({ student, onClose }) {
+  const [loading, setLoading]   = useState(false);
+  const [creds,   setCreds]     = useState(null);
+  const [copied,  setCopied]    = useState('');
+
+  const copy = (text, key) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(key); setTimeout(() => setCopied(''), 2000);
+    });
+  };
+
+  const handleReset = async () => {
+    setLoading(true);
+    try {
+      const r = await resetStudentCredentials(student.id);
+      setCreds(r.data?.credentials);
+      toast.success('Credentials reset successfully');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Reset failed');
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+        {/* Header */}
+        <div className="bg-linear-to-r from-indigo-600 to-purple-500 px-5 py-4 text-white">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
+              <KeyRound size={17} />
+            </div>
+            <div>
+              <h2 className="font-bold text-sm">Login Credentials</h2>
+              <p className="text-indigo-100 text-xs mt-0.5">{student.full_name}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {creds ? (
+            <>
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-3 text-xs text-amber-700 dark:text-amber-400">
+                Save these credentials now — the password will <strong>not be shown again</strong>.
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Username</p>
+                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5">
+                  <code className="flex-1 font-mono text-sm text-slate-800 dark:text-slate-200 select-all">{creds.username}</code>
+                  <button onClick={() => copy(creds.username, 'u')} className="text-slate-400 hover:text-indigo-600 transition-colors">
+                    {copied === 'u' ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+                  </button>
+                </div>
+              </div>
+
+              {creds.tempPassword && (
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Temporary Password</p>
+                  <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5">
+                    <code className="flex-1 font-mono text-sm text-slate-800 dark:text-slate-200 select-all">{creds.tempPassword}</code>
+                    <button onClick={() => copy(creds.tempPassword, 'p')} className="text-slate-400 hover:text-indigo-600 transition-colors">
+                      {copied === 'p' ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {creds.emailSent && (
+                <p className="text-xs text-emerald-600 flex items-center gap-1">
+                  <ShieldCheck size={12} /> {creds.note}
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-slate-600 dark:text-slate-300 text-center py-2">
+              Reset the password to view or share new credentials.
+            </p>
+          )}
+        </div>
+
+        <div className="flex gap-3 px-5 pb-5">
+          <button onClick={onClose} className="flex-1 py-2 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+            Close
+          </button>
+          {!creds ? (
+            <button
+              onClick={handleReset}
+              disabled={loading}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-amber-500 text-white rounded-xl text-sm font-semibold hover:bg-amber-600 disabled:opacity-60 transition-colors"
+            >
+              {loading ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
+              {loading ? 'Resetting…' : 'Reset Password'}
+            </button>
+          ) : (
+            <button
+              onClick={() => window.open(`/students/${student.id}/print?creds=1`, '_blank')}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors"
+            >
+              <Printer size={14} /> Print
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* ── Promote Modal ── */
 function PromoteModal({ classes, onClose, onDone }) {
@@ -119,6 +227,7 @@ export default function StudentsPage() {
   const [deleteTarget,  setDeleteTarget]  = useState(null);
   const [showPromote,   setShowPromote]   = useState(false);
   const [showImport,    setShowImport]    = useState(false);
+  const [credStudent,   setCredStudent]   = useState(null); // student whose credentials to manage
 
   const debouncedSearch = useDebounce(search);
 
@@ -432,6 +541,11 @@ export default function StudentsPage() {
                                 className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-all">
                                 <Printer size={13} />
                               </button>
+                              <button title="Manage Login Credentials"
+                                onClick={() => setCredStudent(s)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-all">
+                                <KeyRound size={13} />
+                              </button>
                               <button title="Leaving Certificate"
                                 onClick={() => window.open(`/students/certificate?type=leaving&student_id=${s.id}`, '_blank')}
                                 className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-all">
@@ -488,6 +602,13 @@ export default function StudentsPage() {
           templateName="students_template.csv"
           description="Upload a CSV with columns: full_name, gender, date_of_birth, grade, class_name, phone, email, address, father_name, father_phone, admission_date, status, b_form_no"
         />
+
+        {credStudent && (
+          <StudentCredentialModal
+            student={credStudent}
+            onClose={() => setCredStudent(null)}
+          />
+        )}
       </div>
     </Layout>
   );

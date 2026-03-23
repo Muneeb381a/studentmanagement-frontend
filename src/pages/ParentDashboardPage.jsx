@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Banknote, CheckCircle2, NotebookPen, FileBarChart2,
-  TrendingUp, AlertTriangle, User,
+  TrendingUp, AlertTriangle, User, CalendarRange, CalendarCheck,
 } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { PageLoader } from '../components/ui/Spinner';
@@ -11,6 +12,7 @@ import { getStudentHistory } from '../api/attendance';
 import { getInvoices } from '../api/fees';
 import { getHomework } from '../api/homework';
 import { getExams } from '../api/exams';
+
 
 function greeting() {
   const h = new Date().getHours();
@@ -28,6 +30,7 @@ export default function ParentDashboardPage() {
   const [invoices,   setInvoices]   = useState([]);
   const [homework,   setHomework]   = useState([]);
   const [exams,      setExams]      = useState([]);
+  const [events,     setEvents]     = useState([]);
   const [loading,    setLoading]    = useState(true);
 
   // entity_id = child's student_id for parents
@@ -37,12 +40,13 @@ export default function ParentDashboardPage() {
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const [childRes, attRes, invRes, hwRes, exRes] = await Promise.all([
+        const [childRes, attRes, invRes, hwRes, exRes, evRes] = await Promise.all([
           childId ? getStudent(childId)                                : Promise.resolve({ data: null }),
           childId ? getStudentHistory(childId, thisMonth)              : Promise.resolve({ data: [] }),
           childId ? getInvoices({ student_id: childId, limit: 10 })   : Promise.resolve({ data: [] }),
           childId ? getHomework({ limit: 8 })                          : Promise.resolve({ data: [] }),
           getExams({ limit: 5 }),
+          api.get('/events', { params: { visible_to_parents: true, limit: 5 } }).catch(() => ({ data: [] })),
         ]);
 
         setChild(childRes.data?.data ?? childRes.data ?? null);
@@ -50,6 +54,8 @@ export default function ParentDashboardPage() {
         setInvoices(Array.isArray(invRes.data) ? invRes.data : []);
         setHomework(Array.isArray(hwRes.data) ? hwRes.data : []);
         setExams(Array.isArray(exRes.data) ? exRes.data : []);
+        const evData = evRes.data?.data ?? evRes.data ?? [];
+        setEvents(Array.isArray(evData) ? evData : []);
       } catch { /* silent */ }
       setLoading(false);
     };

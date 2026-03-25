@@ -8,9 +8,9 @@ import NotificationBell from './NotificationBell';
 
 const ROLE_LINKS = {
   admin:   null,
-  teacher: ['/teacher-dashboard', '/timetable', '/attendance', '/classes', '/students', '/subjects', '/homework', '/exams', '/announcements', '/events', '/messaging', '/diary'],
-  student: ['/student-dashboard', '/messaging', '/diary'],
-  parent:  ['/parent-dashboard', '/messaging', '/diary'],
+  teacher: ['/teacher-dashboard', '/timetable', '/attendance', '/classes', '/students', '/subjects', '/online-classes', '/homework', '/exams', '/announcements', '/events', '/messaging', '/diary'],
+  student: ['/student-dashboard', '/online-classes', '/messaging', '/diary'],
+  parent:  ['/parent-dashboard', '/online-classes', '/messaging', '/diary'],
 };
 
 const ROLE_COLORS = {

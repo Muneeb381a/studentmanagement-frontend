@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   Bell, X, RefreshCw, CheckCheck,
-  DollarSign, AlertTriangle, UserX, BookOpen, Package, FileText, Trash2, CalendarClock,
+  DollarSign, AlertTriangle, UserX, BookOpen, Package, FileText, Trash2, CalendarClock, Video,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -18,7 +18,8 @@ const TYPE_CONFIG = {
   library_overdue:{ icon: BookOpen,      color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-900/20', label: 'Library'       },
   low_stock:      { icon: Package,       color: 'text-amber-500',  bg: 'bg-amber-50 dark:bg-amber-900/20',   label: 'Low Stock'     },
   upcoming_exam:  { icon: FileText,      color: 'text-blue-500',   bg: 'bg-blue-50 dark:bg-blue-900/20',     label: 'Exam'          },
-  leave_request:  { icon: CalendarClock, color: 'text-violet-500', bg: 'bg-violet-50 dark:bg-violet-900/20', label: 'Leave Request' },
+  leave_request:  { icon: CalendarClock, color: 'text-violet-500', bg: 'bg-violet-50 dark:bg-violet-900/20', label: 'Leave Request'  },
+  online_class:   { icon: Video,         color: 'text-indigo-500', bg: 'bg-indigo-50 dark:bg-indigo-900/20', label: 'Online Class'  },
 };
 
 function timeAgo(dateStr) {

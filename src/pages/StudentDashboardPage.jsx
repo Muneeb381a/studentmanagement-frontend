@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Banknote, CheckCircle2, NotebookPen, FileBarChart2,
-  AlertTriangle, BookOpen, Calendar, Clock, Star, Zap, FileCheck,
+  AlertTriangle, BookOpen, Calendar, Clock, Star, Zap, FileCheck, Video, ExternalLink,
 } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { PageLoader } from '../components/ui/Spinner';
@@ -12,6 +12,7 @@ import { getStudentHistory } from '../api/attendance';
 import { getInvoices } from '../api/fees';
 import { getHomework } from '../api/homework';
 import { getExams } from '../api/exams';
+import { getMyClasses } from '../api/onlineClasses';
 import api from '../api/axios';
 
 function greeting() {
@@ -83,26 +84,28 @@ function daysUntil(dateStr) {
 
 export default function StudentDashboardPage() {
   const { user } = useAuth();
-  const [student,    setStudent]    = useState(null);
-  const [attendance, setAttendance] = useState([]);
-  const [invoices,   setInvoices]   = useState([]);
-  const [homework,   setHomework]   = useState([]);
-  const [exams,      setExams]      = useState([]);
-  const [quizzes,    setQuizzes]    = useState([]);
-  const [loading,    setLoading]    = useState(true);
+  const [student,       setStudent]       = useState(null);
+  const [attendance,    setAttendance]    = useState([]);
+  const [invoices,      setInvoices]      = useState([]);
+  const [homework,      setHomework]      = useState([]);
+  const [exams,         setExams]         = useState([]);
+  const [quizzes,       setQuizzes]       = useState([]);
+  const [onlineClasses, setOnlineClasses] = useState([]);
+  const [loading,       setLoading]       = useState(true);
 
   const thisMonth = new Date().toISOString().slice(0, 7);
 
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const [stuRes, attRes, invRes, hwRes, exRes, qzRes] = await Promise.all([
+        const [stuRes, attRes, invRes, hwRes, exRes, qzRes, ocRes] = await Promise.all([
           user.entity_id ? getStudent(user.entity_id)                               : Promise.resolve({ data: null }),
           user.entity_id ? getStudentHistory(user.entity_id, thisMonth)             : Promise.resolve({ data: [] }),
           user.entity_id ? getInvoices({ student_id: user.entity_id, limit: 10 })  : Promise.resolve({ data: [] }),
           getHomework({ limit: 8 }),
           getExams({ limit: 6 }),
           api.get('/quizzes', { params: { status: 'published' } }).catch(() => ({ data: [] })),
+          getMyClasses().catch(() => ({ data: [] })),
         ]);
         setStudent(stuRes.data?.data ?? stuRes.data ?? null);
         setAttendance(Array.isArray(attRes.data) ? attRes.data : []);
@@ -111,6 +114,7 @@ export default function StudentDashboardPage() {
         setExams(Array.isArray(exRes.data) ? exRes.data : []);
         const qzData = qzRes.data?.data ?? qzRes.data ?? [];
         setQuizzes(Array.isArray(qzData) ? qzData : []);
+        setOnlineClasses(Array.isArray(ocRes.data) ? ocRes.data.slice(0, 4) : []);
       } catch { /* silent */ }
       setLoading(false);
     };
@@ -481,6 +485,61 @@ export default function StudentDashboardPage() {
             </div>
           )}
         </div>
+
+        {/* Online Classes widget */}
+        {onlineClasses.length > 0 && (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+              <Video size={16} className="text-indigo-500" />
+              <h2 className="font-bold text-slate-800 dark:text-white text-sm">Upcoming Online Classes</h2>
+              <Link to="/online-classes"
+                className="ml-auto text-[11px] font-semibold text-indigo-500 hover:underline">
+                View all
+              </Link>
+            </div>
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {onlineClasses.map(oc => {
+                const isLive = oc.status === 'live';
+                return (
+                  <div key={oc.id} className={`px-5 py-3 flex items-center gap-3 ${isLive ? 'bg-emerald-50/50 dark:bg-emerald-900/10' : ''}`}>
+                    <div className={`w-9 h-9 rounded-xl flex flex-col items-center justify-center shrink-0 ${isLive ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-indigo-50 dark:bg-indigo-900/20'}`}>
+                      {isLive
+                        ? <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                        : <>
+                            <span className="text-[9px] font-bold text-indigo-500 leading-none">
+                              {new Date(oc.scheduled_at).toLocaleDateString('en',{month:'short'}).toUpperCase()}
+                            </span>
+                            <span className="text-sm font-extrabold text-indigo-600 dark:text-indigo-400 leading-none">
+                              {new Date(oc.scheduled_at).getDate()}
+                            </span>
+                          </>
+                      }
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-slate-800 dark:text-white truncate">{oc.title}</p>
+                      <p className="text-[11px] text-slate-400">
+                        {isLive ? '🔴 Live now' : new Date(oc.scheduled_at).toLocaleTimeString('en-PK',{hour:'2-digit',minute:'2-digit'})}
+                        {oc.teacher_name ? ` · ${oc.teacher_name}` : ''}
+                        {' · '}{oc.duration_minutes}min
+                      </p>
+                    </div>
+                    {oc.meeting_link && (
+                      <a href={oc.meeting_link} target="_blank" rel="noopener noreferrer"
+                        className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 ${
+                          isLive
+                            ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                            : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                        }`}>
+                        <ExternalLink size={11} />
+                        {isLive ? 'Join Now' : 'Join'}
+                      </a>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
       </div>
     </Layout>

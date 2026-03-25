@@ -32,6 +32,7 @@ import {
   Users2,
   RotateCcw,
   FileCheck,
+  Video,
 } from 'lucide-react';
 
 /* ── Navigation links ── */
@@ -139,6 +140,12 @@ export const NAV_LINKS = [
     to: '/salary',
     icon: DollarSign,
     description: 'Teacher payroll & pay slips',
+  },
+  {
+    label: 'Online Classes',
+    to: '/online-classes',
+    icon: Video,
+    description: 'Schedule & join virtual classes',
   },
   {
     label: 'Homework',

@@ -5,7 +5,7 @@ import {
   ClipboardList, Banknote, CalendarDays, ClipboardCheck,
   TrendingUp, Activity, Library, FileBarChart2, ChevronRight,
   AlertTriangle, CheckCircle2, Clock3, Wallet, DollarSign,
-  Calendar, BookMarked, UserX, BarChart3, RefreshCw,
+  Calendar, BookMarked, UserX, BarChart3, RefreshCw, Video,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Layout from '../components/layout/Layout';
@@ -16,6 +16,7 @@ import { getTeachers }       from '../api/teachers';
 import { getExams }          from '../api/exams';
 import { getDashboardStats } from '../api/dashboard';
 import { getDashboardStats as getFeeStats } from '../api/fees';
+import { getOnlineClasses } from '../api/onlineClasses';
 import { formatDate, toPct, getInitials, pickGradient } from '../utils';
 import { AVATAR_GRADIENTS } from '../constants';
 
@@ -166,9 +167,10 @@ export default function DashboardPage() {
   const [classes,    setClasses]    = useState([]);
   const [teachers,   setTeachers]   = useState([]);
   const [exams,      setExams]      = useState([]);
-  const [feeStats,   setFeeStats]   = useState(null);
-  const [dash,       setDash]       = useState(null);
-  const [loading,    setLoading]    = useState(true);
+  const [feeStats,      setFeeStats]      = useState(null);
+  const [onlineClasses, setOnlineClasses] = useState([]);
+  const [dash,          setDash]          = useState(null);
+  const [loading,       setLoading]       = useState(true);
   const [dashLoading,setDashLoading]= useState(false);
 
   const loadDash = () => {
@@ -186,12 +188,14 @@ export default function DashboardPage() {
       getTeachers(),
       getExams(),
       getFeeStats().catch(() => ({ data: null })),
-    ]).then(([s, c, t, e, f]) => {
+      getOnlineClasses({ upcoming: 'true' }).catch(() => ({ data: [] })),
+    ]).then(([s, c, t, e, f, oc]) => {
       setStudents(Array.isArray(s.data) ? s.data : []);
       setClasses(Array.isArray(c.data) ? c.data : []);
       setTeachers(Array.isArray(t.data) ? t.data : []);
       setExams(Array.isArray(e.data) ? e.data : []);
       setFeeStats(f.data?.data ?? f.data);
+      setOnlineClasses(Array.isArray(oc.data) ? oc.data.slice(0, 5) : []);
     }).catch(() => {}).finally(() => setLoading(false));
 
     loadDash();
@@ -714,6 +718,52 @@ export default function DashboardPage() {
                   </button>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* ══ ONLINE CLASSES ══ */}
+          {onlineClasses.length > 0 && (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
+              <SectionHeader
+                title="Upcoming Online Classes" sub="Next scheduled virtual sessions"
+                icon={Video} iconCls="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400"
+                action={{ label: 'View all', fn: () => navigate('/online-classes') }}
+              />
+              <ul className="divide-y divide-slate-50 dark:divide-slate-800/60">
+                {onlineClasses.map(oc => {
+                  const isLive = oc.status === 'live';
+                  const dt = new Date(oc.scheduled_at);
+                  const dateStr = dt.toLocaleDateString('en-PK', { month: 'short', day: 'numeric' });
+                  const timeStr = dt.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
+                  return (
+                    <li key={oc.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition-colors">
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isLive ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-indigo-50 dark:bg-indigo-900/20'}`}>
+                        <Video size={14} className={isLive ? 'text-emerald-600 dark:text-emerald-400' : 'text-indigo-500 dark:text-indigo-400'} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">{oc.title}</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          {oc.class_name || oc.subject_name ? `${oc.class_name || ''}${oc.subject_name ? ' · ' + oc.subject_name : ''}` : 'All'}
+                          {' · '}{oc.teacher_name || ''}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        {isLive ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            LIVE
+                          </span>
+                        ) : (
+                          <>
+                            <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300">{timeStr}</p>
+                            <p className="text-[10px] text-slate-400">{dateStr}</p>
+                          </>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
           )}
 

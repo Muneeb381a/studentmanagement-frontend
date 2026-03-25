@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   CalendarDays, NotebookPen, FileBarChart2, Clock,
   CheckCircle2, AlertCircle, Plus, X, CalendarRange,
-  ClipboardList, Loader2, ChevronRight,
+  ClipboardList, Loader2, Video, ExternalLink,
 } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { PageLoader } from '../components/ui/Spinner';
@@ -10,7 +10,8 @@ import { useAuth } from '../context/AuthContext';
 import { getTimetable } from '../api/timetable';
 import { getHomework } from '../api/homework';
 import { getExams } from '../api/exams';
-import { getLeaveBalance, getLeaves, getLeaveTypes, applyLeave, cancelLeave } from '../api/leave';
+import { getLeaveBalance, getLeaves, getLeaveTypes, applyLeave } from '../api/leave';
+import { getOnlineClasses } from '../api/onlineClasses';
 import toast from 'react-hot-toast';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -180,14 +181,15 @@ function ApplyLeaveModal({ teacherId, leaveTypes, onClose, onSaved }) {
 // ── Main Dashboard ───────────────────────────────────────────
 export default function TeacherDashboardPage() {
   const { user } = useAuth();
-  const [timetable,   setTimetable]   = useState([]);
-  const [homework,    setHomework]    = useState([]);
-  const [exams,       setExams]       = useState([]);
-  const [leaves,      setLeaves]      = useState([]);
-  const [balance,     setBalance]     = useState([]);
-  const [leaveTypes,  setLeaveTypes]  = useState([]);
-  const [loading,     setLoading]     = useState(true);
-  const [showApply,   setShowApply]   = useState(false);
+  const [timetable,    setTimetable]    = useState([]);
+  const [homework,     setHomework]     = useState([]);
+  const [exams,        setExams]        = useState([]);
+  const [leaves,       setLeaves]       = useState([]);
+  const [balance,      setBalance]      = useState([]);
+  const [leaveTypes,   setLeaveTypes]   = useState([]);
+  const [onlineClasses,setOnlineClasses]= useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [showApply,    setShowApply]    = useState(false);
 
   const todayName = DAYS[new Date().getDay()];
 
@@ -206,16 +208,20 @@ export default function TeacherDashboardPage() {
   useEffect(() => {
     const fetchAll = async () => {
       const empty = { data: [] };
-      const [ttRes, hwRes, exRes, ltRes] = await Promise.all([
+      const [ttRes, hwRes, exRes, ltRes, ocRes] = await Promise.all([
         user.entity_id ? getTimetable({ teacher_id: user.entity_id }).catch(() => empty) : Promise.resolve(empty),
         user.entity_id ? getHomework({ teacher_id: user.entity_id, limit: 10 }).catch(() => empty) : Promise.resolve(empty),
         getExams().catch(() => empty),
         getLeaveTypes().catch(() => empty),
+        user.entity_id
+          ? getOnlineClasses({ teacher_id: user.entity_id, upcoming: 'true' }).catch(() => empty)
+          : Promise.resolve(empty),
       ]);
       setTimetable(Array.isArray(ttRes.data) ? ttRes.data : []);
       setHomework(Array.isArray(hwRes.data) ? hwRes.data : []);
       setExams(Array.isArray(exRes.data) ? exRes.data : []);
       setLeaveTypes(Array.isArray(ltRes.data) ? ltRes.data : []);
+      setOnlineClasses(Array.isArray(ocRes.data) ? ocRes.data.slice(0, 5) : []);
       await fetchLeaves();
       setLoading(false);
     };
@@ -367,6 +373,57 @@ export default function TeacherDashboardPage() {
                   </span>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Online Classes widget */}
+        {onlineClasses.length > 0 && (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+              <Video size={16} className="text-indigo-500" />
+              <h2 className="font-bold text-slate-800 dark:text-white text-sm">Upcoming Online Classes</h2>
+              <a href="/online-classes"
+                className="ml-auto text-[11px] font-semibold text-indigo-500 hover:underline">
+                View all
+              </a>
+            </div>
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {onlineClasses.map(oc => {
+                const isLive = oc.status === 'live';
+                return (
+                  <div key={oc.id} className="px-5 py-3 flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-xl flex flex-col items-center justify-center shrink-0 ${isLive ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-indigo-50 dark:bg-indigo-900/20'}`}>
+                      {isLive
+                        ? <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        : <>
+                            <span className="text-[9px] font-bold text-indigo-500 leading-none">
+                              {new Date(oc.scheduled_at).toLocaleDateString('en',{month:'short'}).toUpperCase()}
+                            </span>
+                            <span className="text-sm font-extrabold text-indigo-600 dark:text-indigo-400 leading-none">
+                              {new Date(oc.scheduled_at).getDate()}
+                            </span>
+                          </>
+                      }
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-slate-800 dark:text-white truncate">{oc.title}</p>
+                      <p className="text-[11px] text-slate-400">
+                        {isLive ? 'Live now' : new Date(oc.scheduled_at).toLocaleTimeString('en-PK',{hour:'2-digit',minute:'2-digit'})}
+                        {oc.class_name ? ` · ${oc.class_name}` : ''}
+                        {' · '}{oc.duration_minutes}min
+                      </p>
+                    </div>
+                    {oc.meeting_link && (
+                      <a href={oc.meeting_link} target="_blank" rel="noopener noreferrer"
+                        className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold shrink-0 ${isLive ? 'bg-emerald-500 text-white' : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400'}`}>
+                        <ExternalLink size={10} />
+                        {isLive ? 'Join' : 'Link'}
+                      </a>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Banknote, CheckCircle2, NotebookPen, FileBarChart2,
-  TrendingUp, AlertTriangle, User, CalendarRange, CalendarCheck,
+  TrendingUp, AlertTriangle, User, CalendarRange, CalendarCheck, Video,
 } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { PageLoader } from '../components/ui/Spinner';
@@ -12,6 +12,7 @@ import { getStudentHistory } from '../api/attendance';
 import { getInvoices } from '../api/fees';
 import { getHomework } from '../api/homework';
 import { getExams } from '../api/exams';
+import { getMyClasses } from '../api/onlineClasses';
 
 
 function greeting() {
@@ -29,9 +30,10 @@ export default function ParentDashboardPage() {
   const [attendance, setAttendance] = useState([]);
   const [invoices,   setInvoices]   = useState([]);
   const [homework,   setHomework]   = useState([]);
-  const [exams,      setExams]      = useState([]);
-  const [events,     setEvents]     = useState([]);
-  const [loading,    setLoading]    = useState(true);
+  const [exams,         setExams]         = useState([]);
+  const [events,        setEvents]        = useState([]);
+  const [onlineClasses, setOnlineClasses] = useState([]);
+  const [loading,       setLoading]       = useState(true);
 
   // entity_id = child's student_id for parents
   const childId   = user.entity_id;
@@ -40,13 +42,14 @@ export default function ParentDashboardPage() {
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const [childRes, attRes, invRes, hwRes, exRes, evRes] = await Promise.all([
+        const [childRes, attRes, invRes, hwRes, exRes, evRes, ocRes] = await Promise.all([
           childId ? getStudent(childId)                                : Promise.resolve({ data: null }),
           childId ? getStudentHistory(childId, thisMonth)              : Promise.resolve({ data: [] }),
           childId ? getInvoices({ student_id: childId, limit: 10 })   : Promise.resolve({ data: [] }),
           childId ? getHomework({ limit: 8 })                          : Promise.resolve({ data: [] }),
           getExams({ limit: 5 }),
           api.get('/events', { params: { visible_to_parents: true, limit: 5 } }).catch(() => ({ data: [] })),
+          getMyClasses().catch(() => ({ data: [] })),
         ]);
 
         setChild(childRes.data?.data ?? childRes.data ?? null);
@@ -56,6 +59,7 @@ export default function ParentDashboardPage() {
         setExams(Array.isArray(exRes.data) ? exRes.data : []);
         const evData = evRes.data?.data ?? evRes.data ?? [];
         setEvents(Array.isArray(evData) ? evData : []);
+        setOnlineClasses(Array.isArray(ocRes.data) ? ocRes.data.slice(0, 5) : []);
       } catch { /* silent */ }
       setLoading(false);
     };
@@ -227,6 +231,51 @@ export default function ParentDashboardPage() {
           </div>
 
         </div>
+
+        {/* Online Classes */}
+        {onlineClasses.length > 0 && (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+              <Video size={16} className="text-indigo-500" />
+              <h2 className="font-bold text-slate-800 dark:text-white text-sm">Upcoming Online Classes</h2>
+            </div>
+            <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+              {onlineClasses.map(oc => {
+                const isLive = oc.status === 'live';
+                const dt = new Date(oc.scheduled_at);
+                const dateStr = dt.toLocaleDateString('en-PK', { month: 'short', day: 'numeric' });
+                const timeStr = dt.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
+                return (
+                  <li key={oc.id} className="px-5 py-3 flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isLive ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-indigo-50 dark:bg-indigo-900/20'}`}>
+                      <Video size={14} className={isLive ? 'text-emerald-600' : 'text-indigo-500'} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-slate-800 dark:text-white truncate">{oc.title}</p>
+                      <p className="text-[11px] text-slate-400">{oc.subject_name || oc.class_name || '—'} · {oc.teacher_name || ''}</p>
+                    </div>
+                    {isLive ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold shrink-0">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />LIVE
+                      </span>
+                    ) : (
+                      <div className="text-right shrink-0">
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300">{timeStr}</p>
+                        <p className="text-[10px] text-slate-400">{dateStr}</p>
+                      </div>
+                    )}
+                    {oc.meeting_link && (
+                      <a href={oc.meeting_link} target="_blank" rel="noopener noreferrer"
+                        className="ml-1 px-2.5 py-1 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white text-[10px] font-bold shrink-0 transition-colors">
+                        Join
+                      </a>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
 
         {/* Attendance this month */}
         {attendance.length > 0 && (

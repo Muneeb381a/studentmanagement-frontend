@@ -74,6 +74,7 @@ import RolloverWizardPage       from './pages/RolloverWizardPage';
 import QuizzesPage              from './pages/QuizzesPage';
 import QuizTakePage             from './pages/QuizTakePage';
 import QuizResultsPage          from './pages/QuizResultsPage';
+import OnlineClassesPage        from './pages/OnlineClassesPage';
 
 /* Redirect / → role-appropriate home */
 function RoleRedirect() {
@@ -369,6 +370,12 @@ export default function App() {
             <Route path="/quizzes" element={<ProtectedRoute roles={['admin','teacher']}><QuizzesPage /></ProtectedRoute>} />
             <Route path="/quizzes/:id/take" element={<ProtectedRoute roles={['student']}><QuizTakePage /></ProtectedRoute>} />
             <Route path="/quizzes/attempts/:id/results" element={<ProtectedRoute roles={['admin','teacher','student']}><QuizResultsPage /></ProtectedRoute>} />
+
+            <Route path="/online-classes" element={
+              <ProtectedRoute roles={['admin','teacher','student','parent']}>
+                <OnlineClassesPage />
+              </ProtectedRoute>
+            } />
 
             <Route path="*" element={<NotFoundPage />} />
           </Routes>

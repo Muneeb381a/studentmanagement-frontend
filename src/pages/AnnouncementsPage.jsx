@@ -509,7 +509,6 @@ function AnnouncementFormModal({ initial, onClose, onSaved }) {
     target_audience:   'all',
     class_id:          '',
     priority:          'normal',
-    expires_at:        '',
     is_active:         true,
     ...initial,
     // Normalise date format for <input type="date">

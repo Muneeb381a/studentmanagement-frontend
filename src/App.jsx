@@ -5,7 +5,8 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 
 /* Auth */
-import LoginPage from './pages/LoginPage';
+import LoginPage          from './pages/LoginPage';
+import ChangePasswordPage from './pages/ChangePasswordPage';
 
 /* Role Dashboards */
 import DashboardPage          from './pages/DashboardPage';
@@ -93,8 +94,9 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             {/* Public */}
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/setup" element={<SetupPage />} />
+            <Route path="/login"           element={<LoginPage />} />
+            <Route path="/change-password" element={<ChangePasswordPage />} />
+            <Route path="/setup"           element={<SetupPage />} />
 
             {/* Root → smart redirect */}
             <Route path="/" element={

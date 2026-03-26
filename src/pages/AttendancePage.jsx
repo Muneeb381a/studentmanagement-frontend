@@ -8,7 +8,7 @@ import {
   UserCheck, UserX,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { downloadBlob } from '../utils';
+import { downloadBlob, classifyApiError } from '../utils';
 import Layout from '../components/layout/Layout';
 import { getClasses } from '../api/classes';
 import { getPeriods } from '../api/timetable';
@@ -160,7 +160,7 @@ function MarkTab({ classes, periods }) {
       setRecords(data);
       setDirty({});
       setHistory([]);
-    } catch { toast.error('Failed to load attendance'); }
+    } catch (err) { toast.error(classifyApiError(err, 'load attendance')); }
     finally { setLoading(false); }
   }, [mode, date, selectedClass, selectedPeriod]);
 
@@ -248,15 +248,30 @@ function MarkTab({ classes, periods }) {
       .filter(Boolean);
 
     if (!toSave.length) { toast.error('No attendance marked'); return; }
+
+    // Optimistic update — merge dirty changes into records immediately so the UI
+    // reflects the save before the server round-trip completes.
+    const previousRecords = records;
+    const optimisticRecords = records.map(r => {
+      const d = dirty[r.id];
+      if (!d) return r;
+      return { ...r, status: d.status ?? r.status, remarks: d.remarks ?? r.remarks, att_id: r.att_id ?? 'optimistic' };
+    });
+    setRecords(optimisticRecords);
+    setDirty({});
+    setHistory([]);
+
     setSaving(true);
     try {
       const res = await bulkMark(toSave);
       toast.success(`${res.data?.saved ?? toSave.length} records saved`);
-      setDirty({});
-      setHistory([]);
+      // Reload in background to get server-assigned att_ids without blocking the UI
       load();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to save');
+      // Revert to previous state on failure
+      setRecords(previousRecords);
+      setDirty(Object.fromEntries(toSave.map(r => [r.entity_id, { status: r.status, remarks: r.remarks }])));
+      toast.error(err.response?.data?.message || 'Failed to save — changes reverted');
     } finally { setSaving(false); }
   };
 

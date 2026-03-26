@@ -84,6 +84,12 @@ api.interceptors.response.use(
       }
     }
 
+    // Temp password not yet changed — redirect to change-password screen
+    if (status === 403 && code === 'PASSWORD_CHANGE_REQUIRED') {
+      window.location.href = '/change-password';
+      return Promise.reject(error);
+    }
+
     // Any other hard 401 → clear session and redirect
     if (status === 401 && !originalRequest._retry) {
       tokenStorage.clear();

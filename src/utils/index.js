@@ -87,3 +87,50 @@ export function downloadBlob(blob, filename) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+/**
+ * Classify an Axios error into a user-friendly message with context.
+ *
+ * Returns a string suitable for toast.error() that tells the user
+ * *why* something failed — not just "something went wrong."
+ *
+ * @param {Error} err         The caught error
+ * @param {string} context    What was being attempted, e.g. "load students"
+ * @returns {string}
+ */
+export function classifyApiError(err, context = 'complete this action') {
+  // No response at all — network / CORS issue
+  if (!err.response) {
+    if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+      return `Request timed out while trying to ${context}. Check your connection.`;
+    }
+    return `Cannot reach the server. Check your internet connection and try again.`;
+  }
+
+  const status  = err.response.status;
+  const code    = err.response.data?.code;
+  const message = err.response.data?.message;
+
+  // Use the server's own message when it's specific enough
+  if (message && message.length < 120) {
+    // Still prefix with context for clarity
+    if (status >= 500) return `Server error while trying to ${context}. The team has been notified.`;
+    return message;
+  }
+
+  switch (status) {
+    case 400: return `Invalid request — check your input and try again.`;
+    case 401: return `Your session has expired. Please log in again.`;
+    case 403: return code === 'PASSWORD_CHANGE_REQUIRED'
+      ? 'Please change your temporary password before continuing.'
+      : `You don't have permission to ${context}.`;
+    case 404: return `The requested record was not found.`;
+    case 409: return `A conflict occurred — the record may already exist.`;
+    case 422: return `Validation failed — check required fields.`;
+    case 429: return `Too many requests. Please wait a moment before trying again.`;
+    case 503: return `The server is temporarily unavailable. Try again in a few seconds.`;
+    default:  return status >= 500
+      ? `Server error (${status}) while trying to ${context}.`
+      : `Failed to ${context} (${status}).`;
+  }
+}

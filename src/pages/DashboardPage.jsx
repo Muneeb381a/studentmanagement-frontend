@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users, BookOpen, UserCheck, GraduationCap, Plus, ArrowRight,
@@ -9,15 +9,9 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Layout from '../components/layout/Layout';
-import { PageLoader } from '../components/ui/Spinner';
-import { getStudents }       from '../api/students';
-import { getClasses }        from '../api/classes';
-import { getTeachers }       from '../api/teachers';
-import { getExams }          from '../api/exams';
-import { getDashboardStats } from '../api/dashboard';
-import { getDashboardStats as getFeeStats } from '../api/fees';
-import { getOnlineClasses } from '../api/onlineClasses';
-import { formatDate, toPct, getInitials, pickGradient } from '../utils';
+import { DashboardHeroSkeleton, KpiCardsSkeleton, ListSkeleton, Skeleton } from '../components/ui/Spinner';
+import { useDashboard, useDashboardStats } from '../hooks/useDashboard';
+import { formatDate, toPct, getInitials, pickGradient, classifyApiError } from '../utils';
 import { AVATAR_GRADIENTS } from '../constants';
 
 // ─────────────────────────────────────────────────────────────
@@ -49,14 +43,14 @@ const EXAM_STATUS_CLS = {
   completed: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
 };
 const EVENT_COLORS = {
-  holiday:    '#ef4444', exam: '#f59e0b', sports: '#10b981',
-  ceremony:   '#8b5cf6', meeting: '#3b82f6', other: '#6b7280',
+  holiday:  '#ef4444', exam: '#f59e0b', sports: '#10b981',
+  ceremony: '#8b5cf6', meeting: '#3b82f6', other: '#6b7280',
 };
 
 // ─────────────────────────────────────────────────────────────
-//  Bar Chart (pure CSS — no library)
+//  Bar Chart (pure CSS — memoized, only re-renders when data changes)
 // ─────────────────────────────────────────────────────────────
-function MonthlyChart({ data }) {
+const MonthlyChart = memo(function MonthlyChart({ data }) {
   if (!data || data.length === 0) return (
     <div className="h-40 flex items-center justify-center text-slate-400 text-sm">No data yet</div>
   );
@@ -101,12 +95,12 @@ function MonthlyChart({ data }) {
       </div>
     </div>
   );
-}
+});
 
 // ─────────────────────────────────────────────────────────────
-//  KPI Card
+//  KPI Card (memoized)
 // ─────────────────────────────────────────────────────────────
-function KpiCard({ icon: Icon, label, value, sub, pct, iconBg, from, to, warn }) {
+const KpiCard = memo(function KpiCard({ icon: Icon, label, value, sub, pct, iconBg, from, to, warn }) {
   const pctColor = pct == null ? '#94a3b8' : pct >= 75 ? '#16a34a' : pct >= 50 ? '#d97706' : '#dc2626';
   return (
     <div className={`relative overflow-hidden bg-white dark:bg-slate-900 rounded-2xl border shadow-sm hover:shadow-md transition-all cursor-default ${warn ? 'border-amber-300 dark:border-amber-800' : 'border-slate-200/80 dark:border-slate-800'}`}>
@@ -140,7 +134,46 @@ function KpiCard({ icon: Icon, label, value, sub, pct, iconBg, from, to, warn })
       </div>
     </div>
   );
-}
+});
+
+// ─────────────────────────────────────────────────────────────
+//  BigStatCard (memoized)
+// ─────────────────────────────────────────────────────────────
+const BigStatCard = memo(function BigStatCard({ label, value, icon: Icon, sub, pct, from, to, iconCls }) {
+  return (
+    <div className="relative overflow-hidden bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-md transition-all duration-200 group cursor-default">
+      <div className="absolute top-0 left-0 right-0 h-0.5"
+        style={{ background: `linear-gradient(to right,${from},${to})` }} />
+      <div className="p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-[0.08em]">{label}</p>
+            <p className="text-3xl font-extrabold mt-2 leading-none tracking-tight"
+              style={{ background: `linear-gradient(135deg,${from},${to})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              {value}
+            </p>
+            {sub && <p className="text-xs text-slate-400 dark:text-slate-600 mt-2 font-medium">{sub}</p>}
+          </div>
+          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${iconCls} group-hover:scale-110 transition-transform duration-300`}>
+            <Icon size={20} />
+          </div>
+        </div>
+        {pct !== undefined && (
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[10px] font-medium text-slate-400">of total</span>
+              <span className="text-[10px] font-bold" style={{ color: from }}>{pct}%</span>
+            </div>
+            <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+              <div className="h-full rounded-full transition-all duration-700"
+                style={{ width: `${pct}%`, background: `linear-gradient(to right,${from},${to})` }} />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
 
 // ─────────────────────────────────────────────────────────────
 //  Alert Pill
@@ -163,69 +196,120 @@ function AlertPill({ icon: Icon, count, label, color, onClick }) {
 // ─────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const [students,   setStudents]   = useState([]);
-  const [classes,    setClasses]    = useState([]);
-  const [teachers,   setTeachers]   = useState([]);
-  const [exams,      setExams]      = useState([]);
-  const [feeStats,      setFeeStats]      = useState(null);
-  const [onlineClasses, setOnlineClasses] = useState([]);
-  const [dash,          setDash]          = useState(null);
-  const [loading,       setLoading]       = useState(true);
-  const [dashLoading,setDashLoading]= useState(false);
 
-  const loadDash = () => {
-    setDashLoading(true);
-    getDashboardStats()
-      .then(r => { const d = r.data?.data ?? r.data; setDash(d || null); })
-      .catch(() => toast.error('Failed to load live stats'))
-      .finally(() => setDashLoading(false));
-  };
+  // Single hook → one API call instead of 7
+  const { data, isLoading, isError, error } = useDashboard();
 
-  useEffect(() => {
-    Promise.all([
-      getStudents(),
-      getClasses(),
-      getTeachers(),
-      getExams(),
-      getFeeStats().catch(() => ({ data: null })),
-      getOnlineClasses({ upcoming: 'true' }).catch(() => ({ data: [] })),
-    ]).then(([s, c, t, e, f, oc]) => {
-      setStudents(Array.isArray(s.data) ? s.data : []);
-      setClasses(Array.isArray(c.data) ? c.data : []);
-      setTeachers(Array.isArray(t.data) ? t.data : []);
-      setExams(Array.isArray(e.data) ? e.data : []);
-      setFeeStats(f.data?.data ?? f.data);
-      setOnlineClasses(Array.isArray(oc.data) ? oc.data.slice(0, 5) : []);
-    }).catch(() => {}).finally(() => setLoading(false));
+  // Live stats refresh (separate query, lighter)
+  const { data: liveStats, isFetching: statsRefreshing, refetch: refreshStats } = useDashboardStats();
 
-    loadDash();
-  }, []);
+  // Derive "live" KPIs from dedicated stats query when available, otherwise fall back to full data
+  const kpis  = liveStats?.kpis  ?? data?.kpis;
+  const chart = liveStats?.chart ?? data?.chart;
+  const today = liveStats?.today_panel ?? data?.today_panel;
+  const alerts= liveStats?.alerts      ?? data?.alerts;
 
-  // Use accurate counts from the dashboard stats API (avoids pagination cap of 50)
-  const counts        = dash?.counts;
-  const total         = counts?.total_students  ?? students.length;
-  const active        = counts?.total_students  ?? students.filter(s => s.status === 'active').length;
-  const males         = counts?.male_students   ?? students.filter(s => s.gender === 'Male').length;
-  const females       = counts?.female_students ?? students.filter(s => s.gender === 'Female').length;
-  const activeTeach   = counts?.total_teachers  ?? teachers.filter(t => t.status === 'active').length;
-  const totalClasses  = counts?.total_classes   ?? classes.length;
-  const inactive      = students.filter(s => s.status === 'inactive').length;
-  const suspended     = students.filter(s => s.status === 'suspended').length;
-  const graduated     = students.filter(s => s.status === 'graduated').length;
-  const recentStuds   = [...students].reverse().slice(0, 6);
-  const upcomingExams = exams.filter(e => e.status !== 'completed').slice(0, 4);
-  const ongoingExams  = exams.filter(e => e.status === 'ongoing').length;
-  const malePct       = toPct(males,   total);
-  const femalePct     = toPct(females, total);
-  const otherPct      = Math.max(0, 100 - malePct - femalePct);
+  // ── Derived counts (memoized) ────────────────────────────
+  const counts = useMemo(() => {
+    const c = liveStats?.counts ?? data?.counts ?? {};
+    return {
+      total:     c.all_students    ?? 0,
+      active:    c.active_students ?? 0,
+      inactive:  c.inactive_students  ?? 0,
+      suspended: c.suspended_students ?? 0,
+      graduated: c.graduated_students ?? 0,
+      males:     c.male_students   ?? 0,
+      females:   c.female_students ?? 0,
+      teachers:  c.total_teachers  ?? 0,
+      classes:   c.total_classes   ?? 0,
+    };
+  }, [liveStats?.counts, data?.counts]);
 
-  const kpis  = dash?.kpis;
-  const chart = dash?.chart;
-  const today = dash?.today_panel;
-  const alerts= dash?.alerts;
+  // ── Derived lists (memoized) ─────────────────────────────
+  const recentStuds   = useMemo(() => data?.students   ?? [], [data?.students]);
+  const classes       = useMemo(() => data?.classes    ?? [], [data?.classes]);
+  const teachers      = useMemo(() => data?.teachers   ?? [], [data?.teachers]);
+  const upcomingExams = useMemo(
+    () => (data?.exams ?? []).filter(e => e.status !== 'completed').slice(0, 4),
+    [data?.exams]
+  );
+  const ongoingExams  = useMemo(
+    () => (data?.exams ?? []).filter(e => e.status === 'ongoing').length,
+    [data?.exams]
+  );
+  const onlineClasses = useMemo(() => data?.online_classes ?? [], [data?.online_classes]);
+  const feeStats      = useMemo(() => data?.fee_summary ?? null, [data?.fee_summary]);
+
+  // ── Derived percentages (memoized) ──────────────────────
+  const { malePct, femalePct, otherPct } = useMemo(() => {
+    const m = toPct(counts.males,   counts.total);
+    const f = toPct(counts.females, counts.total);
+    return { malePct: m, femalePct: f, otherPct: Math.max(0, 100 - m - f) };
+  }, [counts.males, counts.females, counts.total]);
+
   const totalAlerts = (alerts?.fee_defaulters || 0) + (alerts?.chronic_absent || 0) + (alerts?.overdue_books || 0);
 
-  if (loading) return <Layout><PageLoader /></Layout>;
+  // ── Error toast ──────────────────────────────────────────
+  if (isError) {
+    toast.error(classifyApiError(error, 'load dashboard'));
+  }
+
+  // ── Skeleton loading state ───────────────────────────────
+  if (isLoading) return (
+    <Layout>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <DashboardHeroSkeleton />
+        <div className="relative z-10 px-4 sm:px-6 lg:px-8 -mt-12 pb-12 space-y-6">
+          <KpiCardsSkeleton />
+          {/* KPI row 2 */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 space-y-3">
+                <Skeleton className="h-2.5 w-28 rounded-full" />
+                <Skeleton className="h-8 w-20 rounded-lg" />
+                <Skeleton className="h-2 w-full rounded-full" />
+                <Skeleton className="h-1.5 w-full rounded-full" />
+              </div>
+            ))}
+          </div>
+          {/* Main grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
+            <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                <div className="space-y-1.5">
+                  <Skeleton className="h-3.5 w-36 rounded-full" />
+                  <Skeleton className="h-2.5 w-24 rounded-full" />
+                </div>
+                <Skeleton className="h-7 w-16 rounded-lg" />
+              </div>
+              <ListSkeleton rows={6} />
+            </div>
+            <div className="space-y-4">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm p-5 space-y-3">
+                <Skeleton className="h-3.5 w-28 rounded-full" />
+                <div className="grid grid-cols-2 gap-2">
+                  {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
+                </div>
+              </div>
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm p-5 space-y-3">
+                <Skeleton className="h-3.5 w-32 rounded-full" />
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 py-2">
+                    <Skeleton className="w-8 h-8 rounded-lg shrink-0" />
+                    <div className="flex-1 space-y-1.5">
+                      <Skeleton className="h-3 w-32 rounded-full" />
+                      <Skeleton className="h-2 w-20 rounded-full" />
+                    </div>
+                    <Skeleton className="h-4 w-14 rounded-full shrink-0" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Layout>
+  );
 
   return (
     <Layout>
@@ -254,10 +338,10 @@ export default function DashboardPage() {
             </div>
             <div className="flex items-center gap-3 flex-wrap">
               {[
-                { value: total,         label: 'Students', color: 'from-indigo-300 to-purple-300' },
-                { value: activeTeach,   label: 'Teachers', color: 'from-emerald-300 to-teal-300'  },
-                { value: totalClasses,  label: 'Classes',  color: 'from-amber-300 to-orange-300'  },
-                { value: ongoingExams,   label: 'Ongoing Exams', color: 'from-pink-300 to-rose-300'     },
+                { value: counts.total,    label: 'Students',     color: 'from-indigo-300 to-purple-300' },
+                { value: counts.teachers, label: 'Teachers',     color: 'from-emerald-300 to-teal-300'  },
+                { value: counts.classes,  label: 'Classes',      color: 'from-amber-300 to-orange-300'  },
+                { value: ongoingExams,    label: 'Ongoing Exams',color: 'from-pink-300 to-rose-300'     },
               ].map(({ value, label, color }) => (
                 <div key={label} className="bg-white/10 backdrop-blur-sm border border-white/15 rounded-2xl px-4 py-3 text-center min-w-[80px]">
                   <p className={`text-2xl font-extrabold bg-gradient-to-r ${color} bg-clip-text text-transparent`}>{value}</p>
@@ -287,13 +371,13 @@ export default function DashboardPage() {
 
           {/* ══ LIVE KPI CARDS ══ */}
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-            <BigStatCard label="Total Students"  value={total}        icon={Users}         sub="All enrollments"         from="#6366f1" to="#8b5cf6" iconCls="bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400" />
-            <BigStatCard label="Active Students" value={active}       icon={UserCheck}     pct={toPct(active, total)}    from="#10b981" to="#0d9488" iconCls="bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" />
-            <BigStatCard label="Total Teachers"  value={activeTeach}  icon={GraduationCap} sub="Active teachers"          from="#f59e0b" to="#f97316" iconCls="bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400" />
-            <BigStatCard label="Total Classes"   value={totalClasses} icon={BookOpen}      sub="Across all grades"       from="#3b82f6" to="#06b6d4" iconCls="bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400" />
+            <BigStatCard label="Total Students"  value={counts.total}    icon={Users}         sub="All enrollments"         from="#6366f1" to="#8b5cf6" iconCls="bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400" />
+            <BigStatCard label="Active Students" value={counts.active}   icon={UserCheck}     pct={toPct(counts.active, counts.total)}    from="#10b981" to="#0d9488" iconCls="bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" />
+            <BigStatCard label="Total Teachers"  value={counts.teachers} icon={GraduationCap} sub="Active teachers"          from="#f59e0b" to="#f97316" iconCls="bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400" />
+            <BigStatCard label="Total Classes"   value={counts.classes}  icon={BookOpen}      sub="Across all grades"       from="#3b82f6" to="#06b6d4" iconCls="bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400" />
           </div>
 
-          {/* ══ LIVE KPI ROW 2 — real-time data ══ */}
+          {/* ══ LIVE KPI ROW 2 ══ */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             <KpiCard
               icon={ClipboardCheck}
@@ -325,9 +409,9 @@ export default function DashboardPage() {
               warn={kpis?.pending_salaries > 0}
             />
             {/* Refresh button */}
-            <button onClick={loadDash} disabled={dashLoading}
+            <button onClick={() => refreshStats()} disabled={statsRefreshing}
               className="hidden sm:flex items-center justify-center gap-2 text-xs font-medium text-slate-400 hover:text-indigo-600 transition-colors col-span-3 mt-1">
-              <RefreshCw size={12} className={dashLoading ? 'animate-spin' : ''} />
+              <RefreshCw size={12} className={statsRefreshing ? 'animate-spin' : ''} />
               Refresh live data
             </button>
           </div>
@@ -560,9 +644,9 @@ export default function DashboardPage() {
               </h2>
               <div className="space-y-3">
                 {[
-                  { label: 'Male',   value: males,              pct: malePct,   from: '#3b82f6', to: '#06b6d4' },
-                  { label: 'Female', value: females,            pct: femalePct, from: '#ec4899', to: '#f43f5e' },
-                  { label: 'Other',  value: total-males-females, pct: otherPct, from: '#8b5cf6', to: '#a855f7' },
+                  { label: 'Male',   value: counts.males,                          pct: malePct,   from: '#3b82f6', to: '#06b6d4' },
+                  { label: 'Female', value: counts.females,                        pct: femalePct, from: '#ec4899', to: '#f43f5e' },
+                  { label: 'Other',  value: counts.total-counts.males-counts.females, pct: otherPct, from: '#8b5cf6', to: '#a855f7' },
                 ].map(({ label, value, pct, from, to }) => (
                   <div key={label}>
                     <div className="flex items-center justify-between mb-1.5">
@@ -578,7 +662,7 @@ export default function DashboardPage() {
                   </div>
                 ))}
               </div>
-              {total > 0 && (
+              {counts.total > 0 && (
                 <div className="flex items-center justify-center mt-6">
                   <div className="relative w-24 h-24">
                     <div className="w-24 h-24 rounded-full"
@@ -587,7 +671,7 @@ export default function DashboardPage() {
                         boxShadow: '0 0 0 6px white,0 0 0 7px #e2e8f0',
                       }} />
                     <div className="absolute inset-0 m-5 rounded-full bg-white dark:bg-slate-900 flex items-center justify-center">
-                      <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">{total}</span>
+                      <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">{counts.total}</span>
                     </div>
                   </div>
                 </div>
@@ -604,12 +688,12 @@ export default function DashboardPage() {
               </h2>
               <div className="space-y-3">
                 {[
-                  { label: 'Active',    value: active,    from: '#10b981', to: '#0d9488' },
-                  { label: 'Inactive',  value: inactive,  from: '#94a3b8', to: '#64748b' },
-                  { label: 'Graduated', value: graduated, from: '#6366f1', to: '#8b5cf6' },
-                  { label: 'Suspended', value: suspended, from: '#ef4444', to: '#f97316' },
+                  { label: 'Active',    value: counts.active,    from: '#10b981', to: '#0d9488' },
+                  { label: 'Inactive',  value: counts.inactive,  from: '#94a3b8', to: '#64748b' },
+                  { label: 'Graduated', value: counts.graduated, from: '#6366f1', to: '#8b5cf6' },
+                  { label: 'Suspended', value: counts.suspended, from: '#ef4444', to: '#f97316' },
                 ].map(({ label, value, from, to }) => {
-                  const pct = toPct(value, total);
+                  const pct = toPct(value, counts.total);
                   return (
                     <div key={label}>
                       <div className="flex items-center justify-between mb-1.5">
@@ -629,11 +713,11 @@ export default function DashboardPage() {
               </div>
               <div className="grid grid-cols-2 gap-2 mt-5">
                 <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl px-3 py-2.5 text-center">
-                  <p className="text-lg font-extrabold text-emerald-700 dark:text-emerald-400">{toPct(active, total)}%</p>
+                  <p className="text-lg font-extrabold text-emerald-700 dark:text-emerald-400">{toPct(counts.active, counts.total)}%</p>
                   <p className="text-[10px] font-semibold text-emerald-600/60 dark:text-emerald-500 uppercase tracking-wide">Active</p>
                 </div>
                 <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl px-3 py-2.5 text-center">
-                  <p className="text-lg font-extrabold text-indigo-700 dark:text-indigo-400">{toPct(graduated, total)}%</p>
+                  <p className="text-lg font-extrabold text-indigo-700 dark:text-indigo-400">{toPct(counts.graduated, counts.total)}%</p>
                   <p className="text-[10px] font-semibold text-indigo-600/60 dark:text-indigo-500 uppercase tracking-wide">Grad.</p>
                 </div>
               </div>
@@ -642,7 +726,7 @@ export default function DashboardPage() {
             {/* Class Enrollment */}
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
               <SectionHeader
-                title="Class Enrollment" sub={`${totalClasses} active classes`}
+                title="Class Enrollment" sub={`${counts.classes} active classes`}
                 icon={BookOpen} iconCls="bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
                 action={{ label: 'Manage', fn: () => navigate('/classes') }}
               />
@@ -683,10 +767,10 @@ export default function DashboardPage() {
           </div>
 
           {/* ══ TEACHERS STRIP ══ */}
-          {(teachers.length > 0 || activeTeach > 0) && (
+          {(teachers.length > 0 || counts.teachers > 0) && (
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
               <SectionHeader
-                title="Teaching Staff" sub={`${activeTeach} active`}
+                title="Teaching Staff" sub={`${counts.teachers} active`}
                 icon={GraduationCap} iconCls="bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400"
                 action={{ label: 'View all', fn: () => navigate('/teachers') }}
               />
@@ -709,10 +793,10 @@ export default function DashboardPage() {
                     </button>
                   );
                 })}
-                {activeTeach > 12 && (
+                {counts.teachers > 12 && (
                   <button onClick={() => navigate('/teachers')} className="flex flex-col items-center gap-1.5 shrink-0">
                     <div className="w-11 h-11 rounded-2xl bg-slate-100 dark:bg-slate-800 border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center text-xs font-bold text-slate-500">
-                      +{activeTeach - 12}
+                      +{counts.teachers - 12}
                     </div>
                     <p className="text-[10px] text-slate-400 font-medium">More</p>
                   </button>
@@ -801,42 +885,6 @@ export default function DashboardPage() {
 // ─────────────────────────────────────────────────────────────
 //  Sub-components
 // ─────────────────────────────────────────────────────────────
-function BigStatCard({ label, value, icon: Icon, sub, pct, from, to, iconCls }) {
-  return (
-    <div className="relative overflow-hidden bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-md transition-all duration-200 group cursor-default">
-      <div className="absolute top-0 left-0 right-0 h-0.5"
-        style={{ background: `linear-gradient(to right,${from},${to})` }} />
-      <div className="p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-[0.08em]">{label}</p>
-            <p className="text-3xl font-extrabold mt-2 leading-none tracking-tight"
-              style={{ background: `linear-gradient(135deg,${from},${to})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              {value}
-            </p>
-            {sub && <p className="text-xs text-slate-400 dark:text-slate-600 mt-2 font-medium">{sub}</p>}
-          </div>
-          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${iconCls} group-hover:scale-110 transition-transform duration-300`}>
-            <Icon size={20} />
-          </div>
-        </div>
-        {pct !== undefined && (
-          <div className="mt-4">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[10px] font-medium text-slate-400">of total</span>
-              <span className="text-[10px] font-bold" style={{ color: from }}>{pct}%</span>
-            </div>
-            <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-              <div className="h-full rounded-full transition-all duration-700"
-                style={{ width: `${pct}%`, background: `linear-gradient(to right,${from},${to})` }} />
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function SectionHeader({ title, sub, icon: Icon, iconCls, action, compact = false }) {
   return (
     <div className={`flex items-center justify-between ${compact ? 'mb-1' : 'px-5 py-4 border-b border-slate-100 dark:border-slate-800'}`}>

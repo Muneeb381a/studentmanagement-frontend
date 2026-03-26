@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Plus, ChevronLeft, ChevronRight, CalendarDays, Pencil, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
-import Layout from '../components/layout/Layout';
+import Layout          from '../components/layout/Layout';
 import { ConfirmDialog } from '../components/ui/Modal';
+import { INPUT_CLS, SELECT_CLS } from '../components/ui/Input';
 import { getEvents, createEvent, updateEvent, deleteEvent } from '../api/events';
 
 const EVENT_TYPES = [
@@ -42,7 +43,7 @@ function EventModal({ ev, onClose, onSaved }) {
     setForm(f => ({ ...f, type: t, color: tc }));
   };
 
-  const inp = 'w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all';
+  const inp = INPUT_CLS;
 
   const handleSave = async () => {
     if (!form.title.trim()) return toast.error('Title required');
@@ -169,7 +170,7 @@ export default function EventsPage() {
   const todayStr = today.toISOString().slice(0,10);
   const selEvents = selected ? (evByDate[selected] || []) : [];
 
-  const selCls = 'px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 appearance-none cursor-pointer transition-all';
+  const selCls = SELECT_CLS;
 
   // Upcoming events (sorted, next 10)
   const upcoming = [...events]

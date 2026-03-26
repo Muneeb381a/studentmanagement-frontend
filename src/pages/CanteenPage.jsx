@@ -4,13 +4,23 @@ import {
   Package, BarChart3, TrendingUp, RefreshCw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import Layout from '../components/layout/Layout';
+import Layout     from '../components/layout/Layout';
+import PageHeader from '../components/ui/PageHeader';
+import TabBar     from '../components/ui/TabBar';
+import { INPUT_CLS } from '../components/ui/Input';
+import { ModalHeader } from '../components/ui/Modal';
+
+const CANTEEN_TABS = [
+  { id: 'sales',  label: 'Daily Sales' },
+  { id: 'items',  label: 'Items' },
+  { id: 'report', label: 'Monthly Report' },
+];
 import {
   getItems, createItem, updateItem, deleteItem,
   getSales, createSale, deleteSale, getMonthlySalesReport,
 } from '../api/canteen';
 
-const inp = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30';
+const inp = INPUT_CLS;
 const today = () => new Date().toISOString().slice(0, 10);
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 const fmtCur = (n) => Number(n || 0).toLocaleString('en-PK', { minimumFractionDigits: 0 });
@@ -42,10 +52,7 @@ function ItemModal({ item, onClose, onSaved }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
-          <h2 className="text-base font-bold text-slate-900 dark:text-white">{item ? 'Edit Item' : 'Add Canteen Item'}</h2>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"><X className="w-4 h-4 text-slate-500" /></button>
-        </div>
+        <ModalHeader title={item ? 'Edit Item' : 'Add Canteen Item'} onClose={onClose} />
         <form onSubmit={handleSubmit} className="p-5 space-y-3">
           <input value={form.name} onChange={e => set('name', e.target.value)} placeholder="Item name *" className={inp} />
           <div className="grid grid-cols-2 gap-3">
@@ -187,28 +194,14 @@ export default function CanteenPage() {
         <div className="max-w-7xl mx-auto space-y-6">
 
           {/* Header */}
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-lg"
-              style={{ background: 'linear-gradient(135deg, #f59e0b, #f97316)' }}>
-              <ShoppingCart className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Canteen</h1>
-              <p className="text-sm text-slate-500 dark:text-slate-400">POS & canteen revenue tracking</p>
-            </div>
-          </div>
+          <PageHeader
+            icon={ShoppingCart}
+            title="Canteen"
+            subtitle="POS & canteen revenue tracking"
+          />
 
           {/* Tabs */}
-          <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-fit">
-            {[['sales', 'Daily Sales'], ['items', 'Items'], ['report', 'Monthly Report']].map(([key, label]) => (
-              <button key={key} onClick={() => setTab(key)}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                  tab === key ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
-                }`}>
-                {label}
-              </button>
-            ))}
-          </div>
+          <TabBar tabs={CANTEEN_TABS} active={tab} onChange={setTab} />
 
           {/* ── Daily Sales Tab ── */}
           {tab === 'sales' && (

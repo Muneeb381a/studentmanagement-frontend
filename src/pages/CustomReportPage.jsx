@@ -4,7 +4,8 @@ import {
   ClipboardList, Play, Download, ChevronDown,
   Users, GraduationCap, Banknote, BookOpen, Receipt,
 } from 'lucide-react';
-import Layout from '../components/layout/Layout';
+import Layout     from '../components/layout/Layout';
+import PageHeader from '../components/ui/PageHeader';
 import Spinner from '../components/ui/Spinner';
 import { getCustomReport } from '../api/analytics';
 import { downloadBlob } from '../utils';
@@ -200,16 +201,11 @@ export default function CustomReportPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-5">
 
         {/* Header */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-md"
-            style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
-            <ClipboardList size={20} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900 dark:text-white">Custom Report Builder</h1>
-            <p className="text-sm text-slate-400">Select entity → apply filters → preview → export</p>
-          </div>
-        </div>
+        <PageHeader
+          icon={ClipboardList}
+          title="Custom Report Builder"
+          subtitle="Select entity → apply filters → preview → export"
+        />
 
         {/* Builder panel */}
         <div className={`${cardCls} p-5 space-y-5`}>

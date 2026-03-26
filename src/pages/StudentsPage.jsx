@@ -2,7 +2,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Users, UserCheck, TrendingUp, Filter, X, Pencil, Trash2, Mail, Phone, CreditCard, ArrowUpCircle, FileText, BarChart2, Printer, Upload, Download, KeyRound, Copy, Check, ShieldCheck, AlertTriangle, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import Layout from '../components/layout/Layout';
+import Layout          from '../components/layout/Layout';
+import { SELECT_CLS }  from '../components/ui/Input';
 import { StatCard } from '../components/ui/Card';
 import { PageLoader } from '../components/ui/Spinner';
 import { ConfirmDialog } from '../components/ui/Modal';
@@ -130,7 +131,7 @@ function PromoteModal({ classes, onClose, onDone }) {
   const [toClass,   setToClass]   = useState('');
   const [saving,    setSaving]    = useState(false);
 
-  const selCls = 'w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 appearance-none cursor-pointer transition-all';
+  const selCls = SELECT_CLS;
 
   const handlePromote = async () => {
     if (!fromClass || !toClass) return toast.error('Please select both classes');
@@ -262,7 +263,7 @@ export default function StudentsPage() {
     statusFilter && { label: `Status: ${statusFilter}`, clear: () => setStatusFilter('') },
   ].filter(Boolean);
 
-  const selCls = 'w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 appearance-none cursor-pointer transition-all';
+  const selCls = SELECT_CLS;
 
   return (
     <Layout>

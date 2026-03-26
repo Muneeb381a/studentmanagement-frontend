@@ -1,7 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Clock, Plus, Trash2, Printer, RefreshCw, ChevronDown, X, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
-import Layout from '../components/layout/Layout';
+import Layout     from '../components/layout/Layout';
+import PageHeader from '../components/ui/PageHeader';
+import TabBar     from '../components/ui/TabBar';
+import { INPUT_CLS, SELECT_CLS } from '../components/ui/Input';
+
+const LATE_TABS = [
+  { id: 'mark',     label: 'Mark Late' },
+  { id: 'register', label: 'Monthly Register' },
+];
 import { getClasses } from '../api/classes';
 import { getStudents } from '../api/students';
 import { recordLate, getLateArrivals, getMonthlyRegister, deleteLateArrival } from '../api/lateArrivals';
@@ -10,7 +18,7 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-PK', { day: 'numer
 const today = () => new Date().toISOString().slice(0, 10);
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 
-const selCls = 'px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 appearance-none';
+const selCls = SELECT_CLS;
 
 export default function LateArrivalsPage() {
   const [tab, setTab] = useState('mark');
@@ -117,32 +125,14 @@ export default function LateArrivalsPage() {
         <div className="max-w-6xl mx-auto space-y-6">
 
           {/* Header */}
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-lg"
-                style={{ background: 'linear-gradient(135deg, #f97316, #fb923c)' }}>
-                <Clock className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Late Arrivals</h1>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Track & register late student arrivals</p>
-              </div>
-            </div>
-          </div>
+          <PageHeader
+            icon={Clock}
+            title="Late Arrivals"
+            subtitle="Track & register late student arrivals"
+          />
 
           {/* Tabs */}
-          <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-fit">
-            {[['mark', 'Mark Late'], ['register', 'Monthly Register']].map(([key, label]) => (
-              <button key={key} onClick={() => setTab(key)}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                  tab === key
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
-                }`}>
-                {label}
-              </button>
-            ))}
-          </div>
+          <TabBar tabs={LATE_TABS} active={tab} onChange={setTab} />
 
           {/* ── Mark Late Tab ── */}
           {tab === 'mark' && (
@@ -181,7 +171,7 @@ export default function LateArrivalsPage() {
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
                       <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search student..."
-                        className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+                        className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
                     </div>
                     <div className="relative">
                       <select value={studentId} onChange={e => setStudentId(e.target.value)}
@@ -197,12 +187,11 @@ export default function LateArrivalsPage() {
                       className={`${selCls} w-full`} placeholder="Arrival time *" />
                     <input value={reason} onChange={e => setReason(e.target.value)}
                       placeholder="Reason (optional)"
-                      className="px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500/30 w-full" />
+                      className="px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 w-full" />
                   </div>
                   <div className="mt-3 flex justify-end">
                     <button type="submit" disabled={saving}
-                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-60"
-                      style={{ background: 'linear-gradient(135deg, #f97316, #fb923c)' }}>
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm disabled:opacity-60 transition-colors">
                       <Plus className="w-4 h-4" />
                       {saving ? 'Recording…' : 'Record Late Arrival'}
                     </button>

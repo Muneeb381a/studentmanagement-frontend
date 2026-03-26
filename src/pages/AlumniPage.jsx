@@ -4,11 +4,12 @@ import {
   ChevronDown, RefreshCw, MapPin, BookOpen, Phone,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import Layout from '../components/layout/Layout';
+import Layout     from '../components/layout/Layout';
+import PageHeader from '../components/ui/PageHeader';
+import { INPUT_CLS as inp } from '../components/ui/Input';
+import { ModalHeader } from '../components/ui/Modal';
 import { getStudents } from '../api/students';
 import { getAlumni, graduateStudent, updateAlumni, deleteAlumni } from '../api/alumni';
-
-const inp = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30';
 const currentYear = new Date().getFullYear();
 
 function AlumniModal({ alumni, onClose, onSaved }) {
@@ -65,10 +66,7 @@ function AlumniModal({ alumni, onClose, onSaved }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white dark:bg-slate-900 z-10 flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
-          <h2 className="text-base font-bold text-slate-900 dark:text-white">{isEdit ? 'Edit Alumni' : 'Graduate Student'}</h2>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"><X className="w-4 h-4 text-slate-500" /></button>
-        </div>
+        <ModalHeader title={isEdit ? 'Edit Alumni' : 'Graduate Student'} onClose={onClose} sticky />
         <form onSubmit={handleSubmit} className="p-5 space-y-3">
           {!isEdit && (
             <>
@@ -176,28 +174,22 @@ export default function AlumniPage() {
         <div className="max-w-7xl mx-auto space-y-6">
 
           {/* Header */}
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-lg"
-                style={{ background: 'linear-gradient(135deg, #8b5cf6, #a855f7)' }}>
-                <GraduationCap className="w-6 h-6 text-white" />
+          <PageHeader
+            icon={GraduationCap}
+            title="Alumni"
+            subtitle="Track graduated students"
+            actions={
+              <div className="flex items-center gap-2">
+                <button onClick={load} className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800">
+                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                </button>
+                <button onClick={() => setModal('new')}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm transition-colors">
+                  <Plus className="w-4 h-4" /> Graduate Student
+                </button>
               </div>
-              <div>
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Alumni</h1>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Track graduated students</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button onClick={load} className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800">
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              </button>
-              <button onClick={() => setModal('new')}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-semibold shadow-md"
-                style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
-                <Plus className="w-4 h-4" /> Graduate Student
-              </button>
-            </div>
-          </div>
+            }
+          />
 
           {/* Filters */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm p-4">

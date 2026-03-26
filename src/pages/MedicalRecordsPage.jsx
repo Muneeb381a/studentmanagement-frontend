@@ -4,7 +4,9 @@ import {
   Heart, Syringe, ClipboardList, Download,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import Layout from '../components/layout/Layout';
+import Layout     from '../components/layout/Layout';
+import PageHeader from '../components/ui/PageHeader';
+import { INPUT_CLS } from '../components/ui/Input';
 import { getClasses } from '../api/classes';
 import { getStudents } from '../api/students';
 import {
@@ -12,7 +14,7 @@ import {
   addMedicalVisit, deleteMedicalVisit, getMedicalSummary,
 } from '../api/medical';
 
-const inp = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all';
+const inp = INPUT_CLS;
 const lbl = 'block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5';
 
 function fmtDate(d) {
@@ -353,22 +355,17 @@ export default function MedicalRecordsPage() {
         <div className="max-w-6xl mx-auto space-y-6">
 
           {/* Header */}
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-lg"
-                style={{ background: 'linear-gradient(135deg, #10b981, #34d399)' }}>
-                <Stethoscope className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Medical Records</h1>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Student health & vaccination records</p>
-              </div>
-            </div>
-            <button onClick={handleExportCSV}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-              <Download className="w-4 h-4" /> Export Nurse List
-            </button>
-          </div>
+          <PageHeader
+            icon={Stethoscope}
+            title="Medical Records"
+            subtitle="Student health & vaccination records"
+            actions={
+              <button onClick={handleExportCSV}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                <Download className="w-4 h-4" /> Export Nurse List
+              </button>
+            }
+          />
 
           {/* Filters */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm p-4">
@@ -376,7 +373,7 @@ export default function MedicalRecordsPage() {
               <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                 <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search student…"
-                  className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/30" />
+                  className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
                 {search && (
                   <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2">
                     <X className="w-3.5 h-3.5 text-slate-400" />

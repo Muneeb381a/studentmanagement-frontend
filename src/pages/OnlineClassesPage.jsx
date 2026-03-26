@@ -4,7 +4,8 @@ import {
   Users, BookOpen, ChevronDown, CheckCircle2, PlayCircle,
   XCircle, AlertCircle, Edit2, Trash2, Eye, BarChart2,
 } from 'lucide-react';
-import Layout from '../components/layout/Layout';
+import Layout     from '../components/layout/Layout';
+import PageHeader from '../components/ui/PageHeader';
 import { PageLoader } from '../components/ui/Spinner';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -457,24 +458,20 @@ export default function OnlineClassesPage() {
       )}
 
       {/* Header */}
-      <div className="px-4 sm:px-6 lg:px-8 pt-6 pb-4 flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-xl font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
-            <Video size={20} className="text-indigo-500" />
-            Online Classes
-          </h1>
-          <p className="text-xs text-slate-400 mt-0.5">
-            {isStudent ? 'Your upcoming virtual classes' : 'Schedule and manage virtual classes'}
-          </p>
-        </div>
-        {canManage && (
-          <button
-            onClick={() => { setEditing(null); setShowModal(true); }}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm transition-colors"
-          >
-            <Plus size={15} /> Schedule Class
-          </button>
-        )}
+      <div className="px-4 sm:px-6 lg:px-8 pt-6 pb-4">
+        <PageHeader
+          icon={Video}
+          title="Online Classes"
+          subtitle={isStudent ? 'Your upcoming virtual classes' : 'Schedule and manage virtual classes'}
+          actions={canManage && (
+            <button
+              onClick={() => { setEditing(null); setShowModal(true); }}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm transition-colors"
+            >
+              <Plus size={15} /> Schedule Class
+            </button>
+          )}
+        />
       </div>
 
       {/* Filter bar (admin/teacher) */}

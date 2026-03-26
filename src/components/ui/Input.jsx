@@ -1,4 +1,28 @@
 /**
+ * Shared raw className strings for pages that render plain <input> / <select>
+ * elements directly (without the Input / Select wrapper components).
+ *
+ * Usage:
+ *   import { INPUT_CLS, SELECT_CLS } from '../components/ui/Input';
+ *   <input className={INPUT_CLS} ... />
+ *   <select className={SELECT_CLS} ... />
+ */
+export const INPUT_CLS =
+  'w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 ' +
+  'bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-200 ' +
+  'placeholder-slate-400 dark:placeholder-slate-600 ' +
+  'focus:outline-none focus:ring-2 focus:ring-indigo-500/30 ' +
+  'focus:border-indigo-400 dark:focus:border-indigo-500 transition-all';
+
+export const SELECT_CLS =
+  'w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 ' +
+  'bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300 ' +
+  'focus:outline-none focus:ring-2 focus:ring-indigo-500/30 ' +
+  'focus:border-indigo-400 dark:focus:border-indigo-500 appearance-none transition-all';
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
  * Reusable input field with optional label, icon, and error message.
  *
  * @param {string}           label

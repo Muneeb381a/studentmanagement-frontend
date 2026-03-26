@@ -16,7 +16,8 @@ import {
   createInventoryItem, updateInventoryItem, deleteInventoryItem,
   getInventoryImportTemplate, importInventory, exportInventory,
 } from '../api/inventory';
-import ImportModal from '../components/ui/ImportModal';
+import ImportModal      from '../components/ui/ImportModal';
+import { INPUT_CLS }   from '../components/ui/Input';
 
 const CATEGORIES = [
   { value: 'furniture',   label: 'Furniture',     icon: BoxSelect },
@@ -52,7 +53,7 @@ const EMPTY = {
   purchase_price: '', supplier: '', notes: '',
 };
 
-const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 text-slate-800 dark:text-slate-200 text-sm placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400 dark:focus:border-violet-500 transition-all';
+const inputCls = INPUT_CLS;
 const labelCls = 'block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wide';
 
 function ItemModal({ item, onClose, onSaved }) {
@@ -282,12 +283,12 @@ export default function InventoryPage() {
               )}
             </div>
             <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
-              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500/30">
+              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30">
               <option value="">All Categories</option>
               {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
             </select>
             <select value={filterCond} onChange={e => setFilterCond(e.target.value)}
-              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500/30">
+              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30">
               <option value="">All Conditions</option>
               {CONDITIONS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
             </select>

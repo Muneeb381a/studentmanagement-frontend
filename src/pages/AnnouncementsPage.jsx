@@ -6,7 +6,9 @@ import {
   Palmtree, AlertTriangle, Eye, EyeOff, Clock, ChevronDown,
   ToggleLeft, ToggleRight, History, Mail, Loader2,
 } from 'lucide-react';
-import Layout   from '../components/layout/Layout';
+import Layout     from '../components/layout/Layout';
+import PageHeader from '../components/ui/PageHeader';
+import TabBar     from '../components/ui/TabBar';
 import Modal    from '../components/ui/Modal';
 import Button   from '../components/ui/Button';
 import Input    from '../components/ui/Input';
@@ -60,31 +62,14 @@ export default function AnnouncementsPage() {
       <div className="p-6 space-y-6">
 
         {/* Header */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-md"
-            style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
-            <Bell size={20} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900 dark:text-white">Announcements</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Create and manage school-wide notices and announcements</p>
-          </div>
-        </div>
+        <PageHeader
+          icon={Bell}
+          title="Announcements"
+          subtitle="Create and manage school-wide notices and announcements"
+        />
 
         {/* Tabs */}
-        <div className="flex gap-1 bg-slate-100 dark:bg-slate-800/60 p-1 rounded-xl w-fit">
-          {TABS.map(({ id, label, icon: Icon }) => (
-            <button key={id} onClick={() => setTab(id)}
-              className={[
-                'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
-                tab === id
-                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200',
-              ].join(' ')}>
-              <Icon size={14} /> {label}
-            </button>
-          ))}
-        </div>
+        <TabBar tabs={TABS} active={tab} onChange={setTab} />
 
         {tab === 'board'  && <NoticeBoardTab />}
         {tab === 'manage' && <ManageTab />}

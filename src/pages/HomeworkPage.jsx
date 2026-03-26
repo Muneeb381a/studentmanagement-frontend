@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Plus, BookOpen, Clock, CheckCircle, AlertCircle, Pencil, Trash2, X, Calendar, Eye, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
-import Layout from '../components/layout/Layout';
+import Layout          from '../components/layout/Layout';
+import { INPUT_CLS, SELECT_CLS } from '../components/ui/Input';
 import { StatCard } from '../components/ui/Card';
 import { PageLoader } from '../components/ui/Spinner';
 import { ConfirmDialog } from '../components/ui/Modal';
@@ -35,7 +36,7 @@ function HwModal({ hw, classes, subjects, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const inp = 'w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all';
+  const inp = INPUT_CLS;
 
   const handleSave = async () => {
     if (!form.title.trim()) return toast.error('Title required');
@@ -287,7 +288,7 @@ export default function HomeworkPage() {
   const completed = items.filter(h => h.status === 'completed').length;
   const overdue   = items.filter(h => h.status === 'active' && isPast(h.due_date)).length;
 
-  const selCls = 'px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30 appearance-none cursor-pointer transition-all';
+  const selCls = SELECT_CLS;
 
   return (
     <Layout>

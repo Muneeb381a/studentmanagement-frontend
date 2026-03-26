@@ -17,6 +17,7 @@ import TeacherFormModal from '../components/TeacherFormModal';
 import { getTeachers, createTeacher, updateTeacher, deleteTeacher, getTeacherImportTemplate, importTeachers, exportTeachers } from '../api/teachers';
 import { toPct, formatDate, downloadBlob } from '../utils';
 import { TEACHER_STATUS_STYLES } from '../constants';
+import { SELECT_CLS } from '../components/ui/Input';
 
 // ── Credential reveal card shown once after teacher creation ──
 function CredentialCard({ teacher, credentials, onClose }) {
@@ -277,7 +278,7 @@ export default function TeachersPage() {
     t.email?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const selCls = 'px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 appearance-none cursor-pointer transition-all';
+  const selCls = SELECT_CLS;
 
   return (
     <Layout>
@@ -351,7 +352,7 @@ export default function TeachersPage() {
               <input
                 value={search} onChange={e => setSearch(e.target.value)}
                 placeholder="Search name, subject, email…"
-                className="w-full pl-9 pr-9 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all"
+                className="w-full pl-9 pr-9 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all"
               />
               {search && (
                 <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-slate-400 hover:text-slate-600 transition-colors">

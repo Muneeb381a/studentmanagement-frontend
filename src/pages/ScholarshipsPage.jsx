@@ -4,11 +4,22 @@ import {
   Clock3, Search, RefreshCw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import Layout from '../components/layout/Layout';
+import Layout     from '../components/layout/Layout';
+import PageHeader from '../components/ui/PageHeader';
+import TabBar     from '../components/ui/TabBar';
+import { INPUT_CLS } from '../components/ui/Input';
+import { ModalHeader } from '../components/ui/Modal';
+
+const SCHOLARSHIP_STATUS_TABS = [
+  { id: '',         label: 'All' },
+  { id: 'pending',  label: 'Pending' },
+  { id: 'approved', label: 'Approved' },
+  { id: 'rejected', label: 'Rejected' },
+];
 import { getStudents } from '../api/students';
 import { getApplications, createApplication, reviewApplication, deleteApplication } from '../api/scholarships';
 
-const inp = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30';
+const inp = INPUT_CLS;
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
 
 const STATUS_BADGE = {
@@ -47,10 +58,7 @@ function NewApplicationModal({ onClose, onSaved }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white dark:bg-slate-900 z-10 flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
-          <h2 className="text-base font-bold text-slate-900 dark:text-white">New Scholarship Application</h2>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"><X className="w-4 h-4 text-slate-500" /></button>
-        </div>
+        <ModalHeader title="New Scholarship Application" onClose={onClose} sticky />
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           <div>
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Search Student</label>
@@ -128,10 +136,7 @@ function ReviewModal({ application, onClose, onSaved }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
-          <h2 className="text-base font-bold text-slate-900 dark:text-white">Review Application</h2>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"><X className="w-4 h-4 text-slate-500" /></button>
-        </div>
+        <ModalHeader title="Review Application" onClose={onClose} />
         <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 mx-5 mt-5 rounded-xl text-sm space-y-1">
           <p className="font-semibold text-slate-900 dark:text-white">{application.student_name}</p>
           <p className="text-slate-500">{application.class_name || '—'} · {application.discount_type} discount: {application.discount_value}</p>
@@ -201,48 +206,31 @@ export default function ScholarshipsPage() {
     } catch { toast.error('Delete failed'); }
   };
 
-  const STATUS_TABS = ['', 'pending', 'approved', 'rejected'];
-
   return (
     <Layout>
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 sm:p-6 lg:p-8">
         <div className="max-w-7xl mx-auto space-y-6">
 
           {/* Header */}
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-lg"
-                style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
-                <Award className="w-6 h-6 text-white" />
+          <PageHeader
+            icon={Award}
+            title="Scholarships & Concessions"
+            subtitle="Concession approval workflow"
+            actions={
+              <div className="flex items-center gap-2">
+                <button onClick={load} className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800">
+                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                </button>
+                <button onClick={() => setShowNewModal(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm transition-colors">
+                  <Plus className="w-4 h-4" /> New Application
+                </button>
               </div>
-              <div>
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Scholarships & Concessions</h1>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Concession approval workflow</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button onClick={load} className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800">
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              </button>
-              <button onClick={() => setShowNewModal(true)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-semibold shadow-md"
-                style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
-                <Plus className="w-4 h-4" /> New Application
-              </button>
-            </div>
-          </div>
+            }
+          />
 
           {/* Status Tabs */}
-          <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-fit flex-wrap">
-            {STATUS_TABS.map(s => (
-              <button key={s || 'all'} onClick={() => setStatusFilter(s)}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all capitalize ${
-                  statusFilter === s ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
-                }`}>
-                {s || 'All'}
-              </button>
-            ))}
-          </div>
+          <TabBar tabs={SCHOLARSHIP_STATUS_TABS} active={statusFilter} onChange={setStatusFilter} />
 
           {/* Table */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">

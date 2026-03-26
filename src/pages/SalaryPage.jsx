@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { DollarSign, Users, CheckCircle, Clock, Plus, Printer, Settings2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
-import Layout from '../components/layout/Layout';
+import Layout          from '../components/layout/Layout';
+import { INPUT_CLS, SELECT_CLS } from '../components/ui/Input';
 import { StatCard } from '../components/ui/Card';
 import { PageLoader } from '../components/ui/Spinner';
 import Badge from '../components/ui/Badge';
@@ -46,7 +47,7 @@ function StructureModal({ teacher, existing, onClose, onSaved }) {
     } finally { setSaving(false); }
   };
 
-  const inp = 'w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all';
+  const inp = INPUT_CLS;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -105,7 +106,7 @@ function MarkPaidModal({ payment, onClose, onDone }) {
   const [form, setForm] = useState({ payment_date: new Date().toISOString().slice(0,10), payment_method: 'cash', remarks: '' });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const inp = 'w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all';
+  const inp = INPUT_CLS;
 
   const handlePay = async () => {
     setSaving(true);
@@ -163,7 +164,7 @@ function BulkPaidModal({ count, onClose, onConfirm }) {
   const [form, setForm] = useState({ payment_date: new Date().toISOString().slice(0,10), payment_method: 'cash' });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const inp = 'w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all';
+  const inp = INPUT_CLS;
 
   const handleConfirm = async () => {
     setSaving(true);
@@ -285,7 +286,7 @@ export default function SalaryPage() {
   const totalNet = payments.reduce((s, p) => s + parseFloat(p.net_salary || 0), 0);
   const paidNet  = payments.filter(p => p.status === 'paid').reduce((s, p) => s + parseFloat(p.net_salary || 0), 0);
 
-  const selCls = 'px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 appearance-none cursor-pointer transition-all';
+  const selCls = SELECT_CLS;
 
   return (
     <Layout>

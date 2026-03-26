@@ -6,7 +6,10 @@ import {
   Navigation, Clock, Phone, UserCheck, AlertCircle,
   CheckCircle2, Wrench, BarChart3, Route,
 } from 'lucide-react';
-import Layout from '../components/layout/Layout';
+import Layout     from '../components/layout/Layout';
+import PageHeader from '../components/ui/PageHeader';
+import TabBar     from '../components/ui/TabBar';
+import StatCard   from '../components/ui/StatCard';
 import {
   getTransportSummary, getStudentsWithoutTransport,
   getBuses, createBus, updateBus, deleteBus,
@@ -37,41 +40,7 @@ const TRANSPORT_TABS = [
 ];
 
 // ── Small shared components ───────────────────────────────────────────────────
-function TabBar({ tabs, active, onChange }) {
-  return (
-    <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-fit">
-      {tabs.map(t => {
-        const Icon = t.icon;
-        const on = active === t.id;
-        return (
-          <button key={t.id} onClick={() => onChange(t.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              on
-                ? 'bg-white dark:bg-slate-700 text-sky-600 dark:text-sky-400 shadow'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
-            }`}>
-            <Icon size={15} />{t.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
-function SummaryCard({ label, value, sub, icon: Icon, color }) {
-  return (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 flex items-center gap-4">
-      <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}>
-        <Icon size={22} />
-      </div>
-      <div>
-        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{label}</p>
-        <p className="text-2xl font-bold text-slate-800 dark:text-white">{value}</p>
-        {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
-      </div>
-    </div>
-  );
-}
 
 function OccupancyBar({ bus_number, driver_name, route_name, assigned_students, capacity, occupancy_pct, bus_status }) {
   const pct   = Number(occupancy_pct) || 0;
@@ -218,7 +187,7 @@ function BusModal({ bus, onSave, onClose }) {
         </div>
         <div className="flex gap-3 pt-2">
           <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-sm font-medium text-slate-600 dark:text-slate-300">Cancel</button>
-          <button type="submit" className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 text-white text-sm font-semibold shadow hover:opacity-90">
+          <button type="submit" className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow hover:opacity-90">
             {isEdit ? 'Save Changes' : 'Add Bus'}
           </button>
         </div>
@@ -267,7 +236,7 @@ function RouteModal({ route, onSave, onClose }) {
         )}
         <div className="flex gap-3 pt-2">
           <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-sm font-medium text-slate-600 dark:text-slate-300">Cancel</button>
-          <button type="submit" className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 text-white text-sm font-semibold shadow hover:opacity-90">
+          <button type="submit" className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow hover:opacity-90">
             {isEdit ? 'Save Changes' : 'Add Route'}
           </button>
         </div>
@@ -301,7 +270,7 @@ function StopModal({ routeId, stop, onSave, onClose }) {
         <InputField label="Landmark / Description" value={form.landmark} onChange={set('landmark')} placeholder="Near MCB Bank" />
         <div className="flex gap-3 pt-2">
           <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-sm font-medium text-slate-600 dark:text-slate-300">Cancel</button>
-          <button type="submit" className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 text-white text-sm font-semibold shadow hover:opacity-90">
+          <button type="submit" className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow hover:opacity-90">
             {stop?.id ? 'Save' : 'Add Stop'}
           </button>
         </div>
@@ -395,7 +364,7 @@ function AssignModal({ assignment, buses, routes, onSave, onClose }) {
 
         <div className="flex gap-3 pt-2">
           <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-sm font-medium text-slate-600 dark:text-slate-300">Cancel</button>
-          <button type="submit" className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 text-white text-sm font-semibold shadow hover:opacity-90">
+          <button type="submit" className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow hover:opacity-90">
             {isEdit ? 'Update' : 'Assign'}
           </button>
         </div>
@@ -667,19 +636,18 @@ export default function TransportPage() {
     <Layout>
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Transport Management</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              Manage school buses, routes and student assignments
-            </p>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            {tab === 'buses'       && <button onClick={() => setBusModal('new')}    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 text-white text-sm font-semibold shadow hover:opacity-90"><PlusCircle size={16} /> Add Bus</button>}
-            {tab === 'routes'      && <button onClick={() => setRouteModal('new')}  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 text-white text-sm font-semibold shadow hover:opacity-90"><PlusCircle size={16} /> Add Route</button>}
-            {tab === 'assignments' && <button onClick={() => setAssignModal('new')} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 text-white text-sm font-semibold shadow hover:opacity-90"><PlusCircle size={16} /> Assign Student</button>}
-          </div>
-        </div>
+        <PageHeader
+          icon={Bus}
+          title="Transport Management"
+          subtitle="Manage school buses, routes and student assignments"
+          actions={
+            <div className="flex gap-2 flex-wrap">
+              {tab === 'buses'       && <button onClick={() => setBusModal('new')}    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm transition-colors"><PlusCircle size={16} /> Add Bus</button>}
+              {tab === 'routes'      && <button onClick={() => setRouteModal('new')}  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm transition-colors"><PlusCircle size={16} /> Add Route</button>}
+              {tab === 'assignments' && <button onClick={() => setAssignModal('new')} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm transition-colors"><PlusCircle size={16} /> Assign Student</button>}
+            </div>
+          }
+        />
         <div className="mt-5">
           <TabBar tabs={TRANSPORT_TABS} active={tab} onChange={setTab} />
         </div>
@@ -690,10 +658,10 @@ export default function TransportPage() {
         <div className="space-y-6">
           {/* Stat cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <SummaryCard label="Total Buses"       value={summary?.buses?.total ?? 0}               sub={`${summary?.buses?.by_status?.active ?? 0} active`}           icon={Bus}       color="bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400" />
-            <SummaryCard label="Active Routes"     value={summary?.routes?.total ?? 0}              sub="operational routes"                                           icon={Route}     color="bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400" />
-            <SummaryCard label="Students Assigned" value={summary?.assignments?.active ?? 0}        sub="active this year"                                             icon={Users}     color="bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400" />
-            <SummaryCard label="In Maintenance"    value={summary?.buses?.by_status?.maintenance ?? 0} sub="buses under service"                                       icon={Wrench}    color="bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400" />
+            <StatCard label="Total Buses"       value={summary?.buses?.total ?? 0}               sub={`${summary?.buses?.by_status?.active ?? 0} active`}           icon={Bus}       color="bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400" />
+            <StatCard label="Active Routes"     value={summary?.routes?.total ?? 0}              sub="operational routes"                                           icon={Route}     color="bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400" />
+            <StatCard label="Students Assigned" value={summary?.assignments?.active ?? 0}        sub="active this year"                                             icon={Users}     color="bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400" />
+            <StatCard label="In Maintenance"    value={summary?.buses?.by_status?.maintenance ?? 0} sub="buses under service"                                       icon={Wrench}    color="bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400" />
           </div>
 
           {/* Bus occupancy */}

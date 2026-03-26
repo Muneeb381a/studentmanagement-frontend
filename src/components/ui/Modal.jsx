@@ -2,6 +2,40 @@ import { useEffect } from 'react';
 import { X } from 'lucide-react';
 
 /**
+ * Standardized modal header with title, optional subtitle, and close button.
+ *
+ * @param {string}           title
+ * @param {string}           [subtitle]
+ * @param {Function}         [onClose]
+ * @param {boolean}          [sticky=false]  adds sticky top-0 positioning
+ * @param {string}           [className]
+ */
+export function ModalHeader({ title, subtitle, onClose, sticky = false, className = '' }) {
+  return (
+    <div className={[
+      'flex items-center justify-between px-6 py-4',
+      'border-b border-slate-100 dark:border-slate-800',
+      sticky ? 'sticky top-0 bg-white dark:bg-slate-900 z-10' : '',
+      className,
+    ].join(' ')}>
+      <div className="min-w-0">
+        <h2 className="text-base font-bold text-slate-800 dark:text-white leading-tight">{title}</h2>
+        {subtitle && <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{subtitle}</p>}
+      </div>
+      {onClose && (
+        <button
+          onClick={onClose}
+          className="ml-4 shrink-0 p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+        >
+          <X size={16} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+
+/**
  * Generic modal with backdrop, close button, and escape key support.
  *
  * @param {boolean}          isOpen

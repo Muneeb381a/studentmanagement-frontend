@@ -4,7 +4,8 @@ import {
   ChevronDown, ChevronRight, BarChart3, X, Save, Filter,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import Layout from '../components/layout/Layout';
+import Layout     from '../components/layout/Layout';
+import PageHeader from '../components/ui/PageHeader';
 import { PageLoader } from '../components/ui/Spinner';
 import { useAuth } from '../context/AuthContext';
 import { getClasses } from '../api/classes';
@@ -132,25 +133,17 @@ export default function SyllabusPage() {
     <Layout>
       {/* Header */}
       <div className="px-6 pt-6 pb-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white"
-              style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
-              <BookOpen size={20} />
-            </div>
-            <div>
-              <h1 className="text-xl font-extrabold text-slate-800 dark:text-white">Syllabus Tracker</h1>
-              <p className="text-xs text-slate-500">Curriculum coverage per class &amp; subject</p>
-            </div>
-          </div>
-          {(isAdmin || isTeacher) && selClass && selSubj && (
+        <PageHeader
+          icon={BookOpen}
+          title="Syllabus Tracker"
+          subtitle="Curriculum coverage per class & subject"
+          actions={(isAdmin || isTeacher) && selClass && selSubj && (
             <button onClick={openAdd}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white shadow"
-              style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-sm font-semibold text-white shadow-sm transition-colors">
               <Plus size={15} /> Add Topic
             </button>
           )}
-        </div>
+        />
 
         {/* Filters */}
         <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">

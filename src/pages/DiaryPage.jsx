@@ -595,7 +595,7 @@ function PublishPanel({ classId, date, publish, entries, teacherId, dark, onRefr
         <div className="flex gap-2 flex-wrap">
           {!isPublished ? (
             <button onClick={handlePublish} disabled={busy || !totalEntries}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:opacity-90 disabled:opacity-50 shadow-lg shadow-emerald-500/20 transition-opacity">
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 shadow-sm transition-colors">
               {busy ? <Loader2 size={14} className="animate-spin" /> : <Globe size={14} />}
               Publish Diary
             </button>

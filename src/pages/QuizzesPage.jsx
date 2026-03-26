@@ -5,7 +5,18 @@ import {
   ChevronRight, ArrowRight,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import Layout from '../components/layout/Layout';
+import Layout     from '../components/layout/Layout';
+import PageHeader from '../components/ui/PageHeader';
+import TabBar     from '../components/ui/TabBar';
+import { INPUT_CLS } from '../components/ui/Input';
+import { ModalHeader } from '../components/ui/Modal';
+
+const QUIZ_STATUS_TABS = [
+  { id: '',          label: 'All' },
+  { id: 'draft',     label: 'Draft' },
+  { id: 'published', label: 'Published' },
+  { id: 'closed',    label: 'Closed' },
+];
 import { getClasses } from '../api/classes';
 import { getSubjects } from '../api/subjects';
 import {
@@ -13,7 +24,7 @@ import {
   addQuestion, deleteQuestion, getQuizResults, getQuizById,
 } from '../api/quizzes';
 
-const inp = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30';
+const inp = INPUT_CLS;
 const lbl = 'block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5';
 
 const STATUS_BADGE = {
@@ -80,13 +91,7 @@ function CreateQuizWizard({ classes, subjects, onClose, onSaved }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white dark:bg-slate-900 z-10 flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
-          <div>
-            <h2 className="text-base font-bold text-slate-900 dark:text-white">Create Quiz</h2>
-            <p className="text-xs text-slate-400">Step {wizStep + 1} of 3</p>
-          </div>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"><X className="w-4 h-4 text-slate-500" /></button>
-        </div>
+        <ModalHeader title="Create Quiz" subtitle={`Step ${wizStep + 1} of 3`} onClose={onClose} sticky />
 
         <div className="p-5">
           {/* Step indicator */}
@@ -296,10 +301,7 @@ function ResultsModal({ quiz, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white dark:bg-slate-900 z-10 flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
-          <h2 className="text-base font-bold text-slate-900 dark:text-white">Results: {quiz.title}</h2>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"><X className="w-4 h-4 text-slate-500" /></button>
-        </div>
+        <ModalHeader title={`Results: ${quiz.title}`} onClose={onClose} sticky />
         {loading ? (
           <div className="flex justify-center py-10"><div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" /></div>
         ) : attempts.length === 0 ? (
@@ -399,35 +401,20 @@ export default function QuizzesPage() {
         <div className="max-w-7xl mx-auto space-y-6">
 
           {/* Header */}
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-lg"
-                style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
-                <FileCheck className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Quizzes & Assessments</h1>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Create and manage online quizzes</p>
-              </div>
-            </div>
-            <button onClick={() => setShowCreate(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-semibold shadow-md"
-              style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
-              <Plus className="w-4 h-4" /> Create Quiz
-            </button>
-          </div>
+          <PageHeader
+            icon={FileCheck}
+            title="Quizzes & Assessments"
+            subtitle="Create and manage online quizzes"
+            actions={
+              <button onClick={() => setShowCreate(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm transition-colors">
+                <Plus className="w-4 h-4" /> Create Quiz
+              </button>
+            }
+          />
 
           {/* Status filter tabs */}
-          <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-fit">
-            {[['', 'All'], ['draft', 'Draft'], ['published', 'Published'], ['closed', 'Closed']].map(([v, l]) => (
-              <button key={v || 'all'} onClick={() => setStatusFilter(v)}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                  statusFilter === v ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
-                }`}>
-                {l}
-              </button>
-            ))}
-          </div>
+          <TabBar tabs={QUIZ_STATUS_TABS} active={statusFilter} onChange={setStatusFilter} />
 
           {/* Quiz Cards */}
           {loading ? (

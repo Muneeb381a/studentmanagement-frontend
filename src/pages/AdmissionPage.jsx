@@ -1061,8 +1061,7 @@ export default function AdmissionPage() {
                     </button>
                   ) : (
                     <button type="button" onClick={handleSubmit} disabled={saving}
-                      className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-sm font-semibold shadow-md disabled:opacity-60 transition-all hover:opacity-90"
-                      style={{ background: 'linear-gradient(135deg,#10b981,#059669)' }}>
+                      className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm disabled:opacity-60 transition-colors">
                       {saving
                         ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                         : <Check size={15} />}

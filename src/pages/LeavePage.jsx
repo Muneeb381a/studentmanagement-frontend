@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import Layout from '../components/layout/Layout';
+import Layout     from '../components/layout/Layout';
+import PageHeader from '../components/ui/PageHeader';
+import { ModalHeader } from '../components/ui/Modal';
 import toast from 'react-hot-toast';
 import {
   CalendarDays, Plus, CheckCircle2, XCircle, Clock3,
@@ -97,15 +99,7 @@ function ApplyModal({ teachers, leaveTypes, onClose, onSaved }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white dark:bg-slate-900 z-10 flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Apply for Leave</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Submit a new leave application</p>
-          </div>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-            <X className="w-5 h-5 text-slate-500" />
-          </button>
-        </div>
+        <ModalHeader title="Apply for Leave" subtitle="Submit a new leave application" onClose={onClose} sticky />
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {/* Teacher */}
@@ -203,7 +197,7 @@ function ApplyModal({ teachers, leaveTypes, onClose, onSaved }) {
               Cancel
             </button>
             <button type="submit" disabled={saving}
-              className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-60">
+              className="flex-1 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm transition-colors disabled:opacity-60">
               {saving ? 'Submitting…' : 'Submit Application'}
             </button>
           </div>
@@ -234,10 +228,7 @@ function ReviewModal({ leave, onClose, onSaved }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white">Review Leave</h2>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"><X className="w-5 h-5 text-slate-500" /></button>
-        </div>
+        <ModalHeader title="Review Leave" onClose={onClose} />
 
         <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 mx-6 mt-5 rounded-xl space-y-1 text-sm">
           <p className="font-semibold text-slate-900 dark:text-white">{leave.teacher_name}</p>
@@ -441,27 +432,23 @@ export default function LeavePage() {
       <div className="max-w-7xl mx-auto space-y-6">
 
         {/* ── Header ── */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <CalendarDays className="w-7 h-7 text-indigo-600" />
-              Staff Leave Management
-            </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Apply, approve &amp; track teacher leave requests
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => loadAll(true)} disabled={refreshing}
-              className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 transition-colors">
-              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-            </button>
-            <button onClick={() => setShowApply(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-semibold shadow-md hover:shadow-lg transition-all">
-              <Plus className="w-4 h-4" /> Apply Leave
-            </button>
-          </div>
-        </div>
+        <PageHeader
+          icon={CalendarDays}
+          title="Staff Leave Management"
+          subtitle="Apply, approve & track teacher leave requests"
+          actions={
+            <div className="flex items-center gap-2">
+              <button onClick={() => loadAll(true)} disabled={refreshing}
+                className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 transition-colors">
+                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+              </button>
+              <button onClick={() => setShowApply(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm transition-colors">
+                <Plus className="w-4 h-4" /> Apply Leave
+              </button>
+            </div>
+          }
+        />
 
         {/* ── KPI Cards ── */}
         {loading ? (

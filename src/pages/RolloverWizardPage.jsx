@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronRight, RotateCcw, ArrowRight, X } from 'lucide-react';
 import toast from 'react-hot-toast';
-import Layout from '../components/layout/Layout';
+import Layout     from '../components/layout/Layout';
+import PageHeader from '../components/ui/PageHeader';
 import { getClasses } from '../api/classes';
 import { getRolloverPreview, bulkPromote, activateNewYear } from '../api/rollover';
 
@@ -138,16 +139,11 @@ export default function RolloverWizardPage() {
         <div className="max-w-5xl mx-auto space-y-6">
 
           {/* Header */}
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-lg"
-              style={{ background: 'linear-gradient(135deg, #ef4444, #f97316)' }}>
-              <RotateCcw className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Year Rollover Wizard</h1>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Promote students to next academic year</p>
-            </div>
-          </div>
+          <PageHeader
+            icon={RotateCcw}
+            title="Year Rollover Wizard"
+            subtitle="Promote students to next academic year"
+          />
 
           {/* Warning banner */}
           <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/40 rounded-2xl">

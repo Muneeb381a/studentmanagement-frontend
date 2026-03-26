@@ -8,7 +8,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { downloadBlob } from '../utils';
-import Layout from '../components/layout/Layout';
+import Layout          from '../components/layout/Layout';
+import { INPUT_CLS }  from '../components/ui/Input';
 import { getClasses } from '../api/classes';
 import { getStudents } from '../api/students';
 import {
@@ -71,7 +72,7 @@ function Sel({ label, value, onChange, children, className = '' }) {
       {label && <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">{label}</label>}
       <div className="relative">
         <select value={value} onChange={e => onChange(e.target.value)}
-          className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400">
+          className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-emerald-400">
           {children}
         </select>
         <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
@@ -85,7 +86,7 @@ function Input({ label, type = 'text', value, onChange, placeholder, className =
     <div className={className}>
       {label && <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">{label}</label>}
       <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400" />
+        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-emerald-400" />
     </div>
   );
 }
@@ -163,7 +164,7 @@ function PaymentModal({ invoice, onClose, onPaid }) {
           <div>
             <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Remarks (optional)</label>
             <textarea value={form.remarks} onChange={e => set('remarks', e.target.value)} rows={2} placeholder="Any notes…"
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 resize-none" />
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 resize-none" />
           </div>
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose}
@@ -813,7 +814,7 @@ function BulkPayModal({ count, onClose, onConfirm }) {
   });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const inp = 'w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all';
+  const inp = INPUT_CLS;
 
   const handleConfirm = async () => {
     setSaving(true);
@@ -957,7 +958,7 @@ function InvoicesTab({ classes, feeHeads }) {
           <div className="relative flex-1 min-w-[200px]">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search student, invoice no…"
-              className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 text-slate-800 dark:text-slate-100" />
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-slate-800 dark:text-slate-100" />
           </div>
           <Sel value={filterStatus} onChange={setFilterStatus} className="w-36">
             <option value="">All Status</option>
@@ -974,7 +975,7 @@ function InvoicesTab({ classes, feeHeads }) {
           <div>
             <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Month</label>
             <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)}
-              className="px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/30" />
+              className="px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
           </div>
           <div className="flex items-end gap-2 flex-wrap">
             {selectedIds.size > 0 && (
@@ -1280,12 +1281,12 @@ function GenerateTab({ classes }) {
               <div>
                 <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Billing Month *</label>
                 <input type="month" value={month} onChange={e => setMonth(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/30" />
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Due Date</label>
                 <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/30" />
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
               </div>
             </div>
             <Sel label="Class (leave blank for all classes)" value={classId} onChange={setClassId}>
@@ -1340,7 +1341,7 @@ function GenerateTab({ classes }) {
               <div>
                 <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Due Date</label>
                 <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/30" />
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
               </div>
             </div>
           </>
@@ -1420,7 +1421,7 @@ function LateFeeCard() {
           <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Type</label>
           <div className="relative">
             <select value={feeType} onChange={e => setFeeType(e.target.value)}
-              className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-orange-500/30">
+              className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500/30">
               <option value="fixed">Fixed (PKR)</option>
               <option value="percent">Percent (%)</option>
             </select>
@@ -1434,14 +1435,14 @@ function LateFeeCard() {
           <input type="number" min="0.01" step="0.01" value={feeValue}
             onChange={e => setFeeValue(e.target.value)}
             placeholder={feeType === 'percent' ? 'e.g. 5' : 'e.g. 200'}
-            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
         </div>
       </div>
 
       <div>
         <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Billing Month (optional — leave blank for all overdue)</label>
         <input type="month" value={month} onChange={e => setMonth(e.target.value)}
-          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30" />
+          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
       </div>
 
       <button onClick={handleApply} disabled={applying}
@@ -1527,7 +1528,7 @@ function ConcessionsTab({ classes, feeHeads }) {
   };
 
   const selStudent = students.find(s => String(s.id) === String(studentId));
-  const inp = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30';
+  const inp = INPUT_CLS;
 
   return (
     <div className="space-y-4">
@@ -1933,12 +1934,12 @@ function ReportsTab({ classes }) {
           <div>
             <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">From Month</label>
             <input type="month" value={monthFrom} onChange={e => setMonthFrom(e.target.value)}
-              className="px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/30" />
+              className="px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">To Month</label>
             <input type="month" value={monthTo} onChange={e => setMonthTo(e.target.value)}
-              className="px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/30" />
+              className="px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
           </div>
           <Sel label="Class" value={classId} onChange={setClassId} className="w-44">
             <option value="">All Classes</option>

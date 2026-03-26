@@ -5,7 +5,7 @@ import {
   TrendingUp, TrendingDown, Wallet, BarChart3,
   RefreshCw, X, ChevronDown, Receipt, PieChart,
   CalendarDays, Tag, CreditCard, FileText, DollarSign,
-  ArrowUpRight, ArrowDownRight, Download, Upload,
+  Download, Upload,
 } from 'lucide-react';
 import Layout   from '../components/layout/Layout';
 import { downloadBlob } from '../utils';
@@ -15,7 +15,11 @@ import {
   getExpenseSummary, getMonthlyReport, getYearlyReport, getByCategoryReport,
   getExpenseImportTemplate, importExpenses, exportExpenses,
 } from '../api/expenses';
-import ImportModal from '../components/ui/ImportModal';
+import ImportModal  from '../components/ui/ImportModal';
+import PageHeader   from '../components/ui/PageHeader';
+import TabBar       from '../components/ui/TabBar';
+import StatCard     from '../components/ui/StatCard';
+import { ModalHeader } from '../components/ui/Modal';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 const fmt = (n) =>
@@ -64,27 +68,6 @@ const TABS = [
 ];
 
 // ── Small reusable pieces ────────────────────────────────────────────────────
-function StatCard({ label, value, sub, icon: Icon, color, trend, trendVal }) {
-  const positive = Number(trendVal) > 0;
-  return (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 flex items-start gap-4">
-      <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}>
-        <Icon size={22} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mb-0.5">{label}</p>
-        <p className="text-2xl font-bold text-slate-800 dark:text-white truncate">PKR {fmt(value)}</p>
-        {sub && <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{sub}</p>}
-        {trend && (
-          <div className={`flex items-center gap-1 mt-1 text-xs font-semibold ${positive ? 'text-emerald-500' : 'text-red-500'}`}>
-            {positive ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
-            {Math.abs(trendVal)}% vs last month
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 function Badge({ children, className = '' }) {
   return (
@@ -180,15 +163,7 @@ function ExpenseModal({ expense, categories, onSave, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">
-          <h2 className="text-lg font-bold text-slate-800 dark:text-white">
-            {isEdit ? 'Edit Expense' : 'Record New Expense'}
-          </h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400">
-            <X size={18} />
-          </button>
-        </div>
+        <ModalHeader title={isEdit ? 'Edit Expense' : 'Record New Expense'} onClose={onClose} />
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {/* Category + Title */}
@@ -239,7 +214,7 @@ function ExpenseModal({ expense, categories, onSave, onClose }) {
               Cancel
             </button>
             <button type="submit"
-              className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 text-white text-sm font-semibold shadow hover:opacity-90">
+              className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow hover:opacity-90">
               {isEdit ? 'Save Changes' : 'Record Expense'}
             </button>
           </div>
@@ -270,14 +245,7 @@ function CategoryModal({ category, onSave, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md">
-        <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">
-          <h2 className="text-lg font-bold text-slate-800 dark:text-white">
-            {isEdit ? 'Edit Category' : 'Add Category'}
-          </h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400">
-            <X size={18} />
-          </button>
-        </div>
+        <ModalHeader title={isEdit ? 'Edit Category' : 'Add Category'} onClose={onClose} />
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <InputField label="Category Name" value={form.category_name} onChange={set('category_name')} required placeholder="e.g. Laboratory" />
           <div className="grid grid-cols-2 gap-3">
@@ -308,7 +276,7 @@ function CategoryModal({ category, onSave, onClose }) {
               Cancel
             </button>
             <button type="submit"
-              className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 text-white text-sm font-semibold shadow hover:opacity-90">
+              className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow hover:opacity-90">
               {isEdit ? 'Save' : 'Add Category'}
             </button>
           </div>
@@ -489,42 +457,22 @@ export default function ExpensesPage() {
     <Layout>
       {/* Page header */}
       <div className="mb-6">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Expense Tracker</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              Track school spending and generate financial reports
-            </p>
-          </div>
-          <button
-            onClick={() => { setTab('expenses'); setExpModal('new'); }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 text-white text-sm font-semibold shadow-lg hover:opacity-90"
-          >
-            <PlusCircle size={16} /> Record Expense
-          </button>
-        </div>
+        <PageHeader
+          icon={Receipt}
+          title="Expense Tracker"
+          subtitle="Track school spending and generate financial reports"
+          actions={
+            <button
+              onClick={() => { setTab('expenses'); setExpModal('new'); }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm transition-colors"
+            >
+              <PlusCircle size={16} /> Record Expense
+            </button>
+          }
+        />
 
         {/* Tabs */}
-        <div className="flex gap-1 mt-5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-fit">
-          {TABS.map(t => {
-            const Icon = t.icon;
-            const active = tab === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  active
-                    ? 'bg-white dark:bg-slate-700 text-violet-600 dark:text-violet-400 shadow'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
-                }`}
-              >
-                <Icon size={15} />
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
+        <TabBar tabs={TABS} active={tab} onChange={setTab} className="mt-5" />
       </div>
 
       {/* ══ TAB: OVERVIEW ══════════════════════════════════════════ */}
@@ -534,34 +482,34 @@ export default function ExpensesPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard
               label="This Month"
-              value={summary?.this_month?.total ?? 0}
+              value={`PKR ${fmt(summary?.this_month?.total ?? 0)}`}
               sub={`${summary?.this_month?.count ?? 0} transactions`}
               icon={Wallet}
-              color="bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400"
+              color="bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400"
               trend={summary?.mom_change_pct != null}
               trendVal={summary?.mom_change_pct}
             />
             <StatCard
               label="Last Month"
-              value={summary?.last_month?.total ?? 0}
+              value={`PKR ${fmt(summary?.last_month?.total ?? 0)}`}
               sub={`${summary?.last_month?.count ?? 0} transactions`}
               icon={CalendarDays}
-              color="bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+              color="bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400"
             />
             <StatCard
               label={`${new Date().getFullYear()} Total`}
-              value={summary?.this_year?.total ?? 0}
+              value={`PKR ${fmt(summary?.this_year?.total ?? 0)}`}
               sub={`${summary?.this_year?.count ?? 0} transactions`}
               icon={TrendingUp}
               color="bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
             />
             <StatCard
               label="Avg. Per Transaction"
-              value={(() => {
+              value={`PKR ${fmt((() => {
                 const cnt = Number(summary?.this_year?.count) || 0;
                 const tot = Number(summary?.this_year?.total) || 0;
                 return cnt > 0 ? Math.round(tot / cnt) : 0;
-              })()}
+              })())}`}
               sub="this year average"
               icon={DollarSign}
               color="bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400"
@@ -949,7 +897,7 @@ export default function ExpensesPage() {
               Manage expense categories for classification and reporting
             </p>
             <button onClick={() => setCatModal('new')}
-              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 text-white text-sm font-semibold shadow hover:opacity-90">
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow hover:opacity-90">
               <PlusCircle size={15} /> Add Category
             </button>
           </div>

@@ -12,7 +12,9 @@ import {
   updateSection, addQuestion, updateQuestion, deleteQuestion,
   getTeacherUsers,
 } from '../api/papers';
-import Layout   from '../components/layout/Layout';
+import Layout     from '../components/layout/Layout';
+import PageHeader from '../components/ui/PageHeader';
+import TabBar     from '../components/ui/TabBar';
 import Modal    from '../components/ui/Modal';
 import Button   from '../components/ui/Button';
 import Input    from '../components/ui/Input';
@@ -143,37 +145,14 @@ export default function ExamsPage() {
     <Layout>
       <div className="p-6 space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-3">
-          <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center shadow-md"
-            style={{ background: 'linear-gradient(135deg,#f59e0b,#f97316)' }}
-          >
-            <ClipboardList size={20} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900 dark:text-white">Exam Management</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Create exams, configure marks, enter results, and generate report cards</p>
-          </div>
-        </div>
+        <PageHeader
+          icon={ClipboardList}
+          title="Exam Management"
+          subtitle="Create exams, configure marks, enter results, and generate report cards"
+        />
 
         {/* Tabs */}
-        <div className="flex gap-1 bg-slate-100 dark:bg-slate-800/60 p-1 rounded-xl w-fit flex-wrap">
-          {TABS.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => setTab(id)}
-              className={[
-                'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
-                tab === id
-                  ? 'bg-white dark:bg-slate-700 text-orange-600 dark:text-orange-400 shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200',
-              ].join(' ')}
-            >
-              <Icon size={14} />
-              {label}
-            </button>
-          ))}
-        </div>
+        <TabBar tabs={TABS} active={tab} onChange={setTab} />
 
         {/* Tab panels */}
         {tab === 'exams'   && <ExamsTab />}
@@ -248,7 +227,7 @@ function ExamsTab() {
             placeholder="Search exams…"
             className="pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700
                        bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200
-                       focus:outline-none focus:ring-2 focus:ring-orange-500/30 w-56"
+                       focus:outline-none focus:ring-2 focus:ring-indigo-500/30 w-56"
           />
         </div>
         <Button onClick={() => { setEditing(null); setModalOpen(true); }}
@@ -401,7 +380,7 @@ function ExamFormModal({ initial, onClose, onSaved }) {
                 onChange={e => set('exam_type', e.target.value)}
                 className="w-full appearance-none text-sm rounded-lg border border-slate-200 dark:border-slate-700
                            bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200
-                           px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                           px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
               >
                 {EXAM_TYPES.map(t => (
                   <option key={t} value={t}>{t.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>
@@ -433,7 +412,7 @@ function ExamFormModal({ initial, onClose, onSaved }) {
                 onChange={e => set('status', e.target.value)}
                 className="w-full appearance-none text-sm rounded-lg border border-slate-200 dark:border-slate-700
                            bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200
-                           px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                           px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
               >
                 <option value="scheduled">Scheduled</option>
                 <option value="ongoing">Ongoing</option>
@@ -583,7 +562,7 @@ function MarksConfigTab() {
                         placeholder="e.g. 100"
                         className="w-32 text-sm rounded-lg border border-slate-200 dark:border-slate-700
                                    bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200
-                                   px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                                   px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
                       />
                     </td>
                     <td className="px-4 py-2">
@@ -594,7 +573,7 @@ function MarksConfigTab() {
                         placeholder="e.g. 40"
                         className="w-32 text-sm rounded-lg border border-slate-200 dark:border-slate-700
                                    bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200
-                                   px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                                   px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
                       />
                     </td>
                   </tr>
@@ -859,7 +838,7 @@ function EnterMarksTab() {
                                   onChange={e => patchCell(student.id, sub.subject_id, { val: e.target.value })}
                                   className={[
                                     'w-16 text-center text-sm rounded-lg border px-2 py-1.5',
-                                    'focus:outline-none focus:ring-2 focus:ring-orange-500/30',
+                                    'focus:outline-none focus:ring-2 focus:ring-indigo-500/30',
                                     'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200',
                                     isOver
                                       ? 'border-red-400 bg-red-50 dark:bg-red-900/20'
@@ -890,7 +869,7 @@ function EnterMarksTab() {
                               value={cell.remarks}
                               onChange={e => patchCell(student.id, sub.subject_id, { remarks: e.target.value })}
                               placeholder="remark…"
-                              className="w-[104px] text-[10px] text-center rounded border border-slate-200 dark:border-slate-700 bg-transparent text-slate-500 dark:text-slate-400 px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-orange-400/40 placeholder:text-slate-300"
+                              className="w-[104px] text-[10px] text-center rounded border border-slate-200 dark:border-slate-700 bg-transparent text-slate-500 dark:text-slate-400 px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500/30 placeholder:text-slate-300"
                             />
                           </div>
                         </td>

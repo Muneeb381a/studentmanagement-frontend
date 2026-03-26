@@ -4,7 +4,15 @@ import {
   Clock, User, Phone, CheckCircle2, XCircle, Printer,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import Layout from '../components/layout/Layout';
+import Layout     from '../components/layout/Layout';
+import PageHeader from '../components/ui/PageHeader';
+import TabBar     from '../components/ui/TabBar';
+import { INPUT_CLS, SELECT_CLS } from '../components/ui/Input';
+
+const MEETING_TABS = [
+  { id: 'slots',    label: 'Slots' },
+  { id: 'bookings', label: 'Bookings' },
+];
 import { getTeachers } from '../api/teachers';
 import {
   createSlots, getSlots, deleteSlot,
@@ -13,8 +21,8 @@ import {
 
 const today = () => new Date().toISOString().slice(0, 10);
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
-const inp = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30';
-const selCls = 'px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300 focus:outline-none appearance-none';
+const inp    = INPUT_CLS;
+const selCls = SELECT_CLS;
 
 const STATUS_BADGE = {
   available: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
@@ -129,28 +137,14 @@ export default function MeetingsPage() {
         <div className="max-w-7xl mx-auto space-y-6">
 
           {/* Header */}
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-lg"
-              style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
-              <CalendarCheck className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">PTM Scheduler</h1>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Parent-teacher meeting slots & bookings</p>
-            </div>
-          </div>
+          <PageHeader
+            icon={CalendarCheck}
+            title="PTM Scheduler"
+            subtitle="Parent-teacher meeting slots & bookings"
+          />
 
           {/* Tabs */}
-          <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-fit">
-            {[['slots', 'Slots'], ['bookings', 'Bookings']].map(([key, label]) => (
-              <button key={key} onClick={() => setTab(key)}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                  tab === key ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
-                }`}>
-                {label}
-              </button>
-            ))}
-          </div>
+          <TabBar tabs={MEETING_TABS} active={tab} onChange={setTab} />
 
           {/* ── Slots Tab ── */}
           {tab === 'slots' && (

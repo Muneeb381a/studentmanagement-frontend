@@ -29,6 +29,7 @@ import SubjectsPage       from './pages/SubjectsPage';
 import ExamsPage          from './pages/ExamsPage';
 import ReportCardPrintPage   from './pages/ReportCardPrintPage';
 import PaperPrintPage        from './pages/PaperPrintPage';
+import ExamDateSheetPrint    from './pages/ExamDateSheetPrint';
 import StudentIdCardPage    from './pages/StudentIdCardPage';
 import CertificatePrintPage from './pages/CertificatePrintPage';
 import AnnouncementsPage  from './pages/AnnouncementsPage';
@@ -51,6 +52,7 @@ import NotFoundPage              from './pages/NotFoundPage';
 import MessagingPage             from './pages/MessagingPage';
 import DiaryPage                from './pages/DiaryPage';
 import FeeChallanPrint          from './pages/FeeChallanPrint';
+import SiblingVoucherPrintPage  from './pages/SiblingVoucherPrintPage';
 import AttendancePrintPage      from './pages/AttendancePrintPage';
 import BoardExamsPage           from './pages/BoardExamsPage';
 import IncomePage               from './pages/IncomePage';
@@ -218,6 +220,11 @@ export default function App() {
                 <PaperPrintPage />
               </ProtectedRoute>
             } />
+            <Route path="/exams/:examId/date-sheet/print" element={
+              <ProtectedRoute roles={['admin', 'teacher']}>
+                <ExamDateSheetPrint />
+              </ProtectedRoute>
+            } />
             <Route path="/announcements" element={
               <ProtectedRoute roles={['admin', 'teacher']}>
                 <AnnouncementsPage />
@@ -246,6 +253,11 @@ export default function App() {
             <Route path="/fees/invoice/:id/challan" element={
               <ProtectedRoute roles={['admin']}>
                 <FeeChallanPrint />
+              </ProtectedRoute>
+            } />
+            <Route path="/fees/sibling-voucher/print" element={
+              <ProtectedRoute roles={['admin', 'teacher']}>
+                <SiblingVoucherPrintPage />
               </ProtectedRoute>
             } />
             <Route path="/fees/receipt/:id" element={

@@ -4,7 +4,7 @@ import {
   Clock3, ChevronDown, Search, Plus, Pencil, Trash2, Save, X,
   Download, RefreshCw, Eye, CreditCard, Layers, ReceiptText,
   Settings2, BarChart3, CalendarDays, Users, Printer, FileText,
-  Tag, Zap, MessageSquare, Copy, Check, Send, Mail, Loader2, UserCircle,
+  Tag, Zap, MessageSquare, Copy, Check, Send, Mail, Loader2, UserCircle, Users2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { downloadBlob } from '../utils';
@@ -19,7 +19,7 @@ import {
   updateInvoice, cancelInvoice, recordPayment, bulkRecordPayments, getMonthlySummary,
   getOutstandingBalances, getDashboardStats, getExportURL,
   getConcessions, saveConcession, deleteConcession, applyLateFees,
-  sendFeeReminders,
+  sendFeeReminders, getSiblingGroups, getSiblingVoucher,
 } from '../api/fees';
 import { getSettings } from '../api/settings';
 
@@ -2083,6 +2083,208 @@ function ReportsTab({ classes }) {
   );
 }
 
+// ── Sibling Voucher Tab ───────────────────────────────────────
+function SiblingsTab() {
+  const [month,   setMonth]   = useState(currentMonth());
+  const [groups,  setGroups]  = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [voucher, setVoucher] = useState(null);   // currently open voucher
+  const [vLoad,   setVLoad]   = useState(false);
+
+  const loadGroups = async () => {
+    setLoading(true);
+    try {
+      const res = await getSiblingGroups(month);
+      setGroups(res.data?.data || []);
+    } catch { toast.error('Failed to load sibling groups'); }
+    finally  { setLoading(false); }
+  };
+
+  const openVoucher = async (father_cnic) => {
+    setVLoad(true);
+    try {
+      const res = await getSiblingVoucher(month, father_cnic);
+      setVoucher(res.data?.voucher || null);
+    } catch { toast.error('Failed to load voucher'); }
+    finally  { setVLoad(false); }
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Controls */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Billing Month</label>
+            <input type="month" value={month} onChange={e => setMonth(e.target.value)}
+              className={INPUT_CLS + ' w-44'} />
+          </div>
+          <button onClick={loadGroups} disabled={loading}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors disabled:opacity-60">
+            {loading ? <Loader2 size={15} className="animate-spin" /> : <Users2 size={15} />}
+            Load Sibling Groups
+          </button>
+        </div>
+      </div>
+
+      {/* Groups table */}
+      {groups.length > 0 && (
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <h3 className="text-sm font-bold text-slate-800 dark:text-white">
+              {groups.length} Sibling Group{groups.length !== 1 ? 's' : ''} — {month}
+            </h3>
+            <span className="text-xs text-slate-400">Click a row to generate combined voucher</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-100 dark:border-slate-700">
+                  {['Father CNIC','Siblings','Combined Total','Outstanding',''].map(h => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {groups.map(g => (
+                  <tr key={g.father_cnic}
+                    className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition-colors">
+                    <td className="px-4 py-3 font-mono text-xs text-slate-700 dark:text-slate-300">{g.father_cnic}</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-semibold">
+                        <Users2 size={11} /> {g.sibling_count}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-slate-800 dark:text-slate-200">
+                      Rs. {fmt(g.combined_total)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`font-semibold ${g.combined_outstanding > 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                        Rs. {fmt(g.combined_outstanding)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => openVoucher(g.father_cnic)} disabled={vLoad}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-semibold hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors">
+                        <Printer size={12} /> Voucher
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {groups.length === 0 && !loading && (
+        <div className="text-center py-16 text-slate-400 dark:text-slate-500 text-sm">
+          Select a month and click "Load Sibling Groups" to see families with multiple enrolled children.
+        </div>
+      )}
+
+      {/* Voucher print modal */}
+      {voucher && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-slate-200 dark:border-slate-700">
+
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900 z-10">
+              <div>
+                <h2 className="text-base font-bold text-slate-800 dark:text-white">Sibling Combined Voucher</h2>
+                <p className="text-xs text-slate-400 mt-0.5">{voucher.voucher_ref} · {voucher.billing_month}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => window.open(`/fees/sibling-voucher/print?billing_month=${voucher.billing_month}&father_cnic=${encodeURIComponent(voucher.father_cnic)}`, '_blank')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors">
+                  <Printer size={13} /> Print
+                </button>
+                <button onClick={() => setVoucher(null)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Voucher body */}
+            <div className="p-6 space-y-5">
+              {/* Family info */}
+              <div className="bg-indigo-50 dark:bg-indigo-500/10 rounded-xl p-4 flex flex-wrap gap-4 justify-between">
+                <div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Father / Guardian</p>
+                  <p className="text-sm font-bold text-slate-800 dark:text-white mt-0.5">
+                    {voucher.father_name || '—'}
+                  </p>
+                  <p className="text-xs text-slate-500 font-mono mt-0.5">{voucher.father_cnic}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Voucher Ref</p>
+                  <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400 mt-0.5 font-mono">{voucher.voucher_ref}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{voucher.billing_month}</p>
+                </div>
+              </div>
+
+              {/* Per-student sections */}
+              {voucher.students.map((s, i) => (
+                <div key={s.student_id || i} className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-100 dark:border-slate-700">
+                    <div>
+                      <span className="text-sm font-semibold text-slate-800 dark:text-white">{s.full_name}</span>
+                      <span className="ml-2 text-xs text-slate-400">{s.class_name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400 font-mono">{s.invoice_no}</span>
+                      <StatusBadge status={s.status} />
+                    </div>
+                  </div>
+                  <div className="px-4 py-3 space-y-1.5">
+                    {(s.items || []).map((item, j) => (
+                      <div key={j} className="flex justify-between text-sm">
+                        <span className="text-slate-600 dark:text-slate-400">{item.description}</span>
+                        <span className="text-slate-800 dark:text-slate-200 font-medium">Rs. {fmt(item.amount)}</span>
+                      </div>
+                    ))}
+                    {s.discount > 0 && (
+                      <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400">
+                        <span>Discount</span>
+                        <span>− Rs. {fmt(s.discount)}</span>
+                      </div>
+                    )}
+                    {s.fine > 0 && (
+                      <div className="flex justify-between text-sm text-red-500">
+                        <span>Late Fine</span>
+                        <span>+ Rs. {fmt(s.fine)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm font-bold text-slate-800 dark:text-white border-t border-slate-100 dark:border-slate-700 pt-2 mt-2">
+                      <span>Outstanding</span>
+                      <span className={s.outstanding > 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600'}>
+                        Rs. {fmt(s.outstanding)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {/* Grand total */}
+              <div className="bg-slate-800 dark:bg-slate-950 rounded-xl px-5 py-4 flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-slate-400">Total Billed</p>
+                  <p className="text-sm font-semibold text-slate-300 mt-0.5">Rs. {fmt(voucher.combined_total)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-slate-400">Combined Outstanding</p>
+                  <p className="text-2xl font-bold text-white mt-0.5">Rs. {fmt(voucher.combined_outstanding)}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────
 export default function FeesPage() {
   const [tab,              setTab]             = useState('invoices');
@@ -2116,6 +2318,7 @@ export default function FeesPage() {
     { key: 'concessions', label: 'Concessions',  icon: Tag          },
     { key: 'setup',       label: 'Fee Setup',    icon: Settings2    },
     { key: 'reports',     label: 'Reports',      icon: BarChart3    },
+    { key: 'siblings',    label: 'Siblings',     icon: Users2       },
   ];
 
   return (
@@ -2187,6 +2390,7 @@ export default function FeesPage() {
         {tab === 'concessions' && <ConcessionsTab classes={classes} feeHeads={feeHeads} />}
         {tab === 'setup'       && <SetupTab       classes={classes} />}
         {tab === 'reports'     && <ReportsTab     classes={classes} />}
+        {tab === 'siblings'    && <SiblingsTab />}
       </div>
     </Layout>
   );

@@ -5,7 +5,7 @@ import {
   BookOpen, BarChart3, Trophy, FileText, Check, X, Calculator,
   Calendar, AlertCircle, CheckCircle2, Clock, TrendingUp, Printer,
   FileEdit, ChevronUp, Loader2, GripVertical, Copy,
-  AlertTriangle, Link2, CheckCircle, Lock, Unlock, Info,
+  AlertTriangle, Link2, CheckCircle, Lock, Unlock, Info, CalendarDays, Save,
 } from 'lucide-react';
 import {
   getPapers, createPaper, updatePaper, deletePaper,
@@ -18,13 +18,15 @@ import TabBar     from '../components/ui/TabBar';
 import Modal    from '../components/ui/Modal';
 import Button   from '../components/ui/Button';
 import Input    from '../components/ui/Input';
-import Spinner  from '../components/ui/Spinner';
+import Spinner    from '../components/ui/Spinner';
+import DatePicker from '../components/ui/DatePicker';
 import {
   getExams, createExam, updateExam, deleteExam, updateExamStatus,
   publishResults, unpublishResults,
   getExamSubjects, addExamSubjects,
   getMarks, submitMarks,
   calculateResults, getResults, getStudentReportCard, getClassRanking,
+  getDateSheet, updateDateSheet,
 } from '../api/exams';
 
 import { getClasses }  from '../api/classes';
@@ -36,11 +38,12 @@ import { useAuth }     from '../context/AuthContext';
 //  Constants & helpers
 // ─────────────────────────────────────────────────────────────
 const TABS = [
-  { id: 'exams',   label: 'Exams',        icon: ClipboardList },
-  { id: 'config',  label: 'Marks Config', icon: BookOpen },
-  { id: 'marks',   label: 'Enter Marks',  icon: Pencil },
-  { id: 'results', label: 'Results',      icon: BarChart3 },
-  { id: 'papers',  label: 'Paper Creator',icon: FileEdit },
+  { id: 'exams',     label: 'Exams',        icon: ClipboardList },
+  { id: 'config',    label: 'Marks Config', icon: BookOpen },
+  { id: 'marks',     label: 'Enter Marks',  icon: Pencil },
+  { id: 'results',   label: 'Results',      icon: BarChart3 },
+  { id: 'datesheet', label: 'Date Sheet',   icon: CalendarDays },
+  { id: 'papers',    label: 'Paper Creator',icon: FileEdit },
 ];
 
 const EXAM_TYPES = ['midterm', 'final', 'quiz', 'monthly_test', 'other'];
@@ -158,8 +161,9 @@ export default function ExamsPage() {
         {tab === 'exams'   && <ExamsTab />}
         {tab === 'config'  && <MarksConfigTab />}
         {tab === 'marks'   && <EnterMarksTab />}
-        {tab === 'results' && <ResultsTab />}
-        {tab === 'papers'  && <PaperCreatorTab />}
+        {tab === 'results'   && <ResultsTab />}
+        {tab === 'datesheet' && <DateSheetTab />}
+        {tab === 'papers'    && <PaperCreatorTab />}
       </div>
     </Layout>
   );
@@ -2137,6 +2141,267 @@ function AddQuestionForm({ section, defaultMarks, accentColor, onRefresh, onCanc
         <button onClick={onCancel}
           className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 text-sm">Cancel</button>
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+//  TAB 6 — Date Sheet
+// ─────────────────────────────────────────────────────────────
+function DateSheetTab() {
+  const [exams,      setExams]      = useState([]);
+  const [classes,    setClasses]    = useState([]);
+  const [examId,     setExamId]     = useState('');
+  const [classId,    setClassId]    = useState('');
+  const [exam,       setExam]       = useState(null);
+  const [rows,       setRows]       = useState([]);   // exam_subjects with schedule fields
+  const [edits,      setEdits]      = useState({});   // { [exam_subject_id]: { exam_date, start_time, end_time, venue } }
+  const [loading,    setLoading]    = useState(false);
+  const [saving,     setSaving]     = useState(false);
+
+  // Load exam list + classes once
+  useEffect(() => {
+    Promise.all([getExams(), getClasses()])
+      .then(([eRes, cRes]) => {
+        setExams(eRes.data?.data ?? eRes.data ?? []);
+        setClasses(cRes.data?.data ?? cRes.data ?? []);
+      })
+      .catch(() => toast.error('Failed to load exams'));
+  }, []);
+
+  // Load date sheet when exam or class changes
+  useEffect(() => {
+    if (!examId) { setRows([]); setExam(null); setEdits({}); return; }
+    setLoading(true);
+    getDateSheet(examId, classId ? { class_id: classId } : {})
+      .then(res => {
+        const d = res.data;
+        setExam(d.exam ?? null);
+        const fetched = d.rows ?? [];
+        setRows(fetched);
+        // Seed edits with current DB values so inputs show existing data
+        const seed = {};
+        fetched.forEach(r => {
+          seed[r.id] = {
+            exam_date:  r.exam_date  ? r.exam_date.slice(0, 10) : '',
+            start_time: r.start_time ? r.start_time.slice(0, 5) : '',
+            end_time:   r.end_time   ? r.end_time.slice(0, 5)   : '',
+            venue:      r.venue      ?? '',
+          };
+        });
+        setEdits(seed);
+      })
+      .catch(() => toast.error('Failed to load date sheet'))
+      .finally(() => setLoading(false));
+  }, [examId, classId]);
+
+  const setField = (id, field, value) =>
+    setEdits(prev => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
+
+  const handleSave = async () => {
+    const schedules = rows.map(r => ({
+      exam_subject_id: r.id,
+      exam_date:  edits[r.id]?.exam_date  || null,
+      start_time: edits[r.id]?.start_time || null,
+      end_time:   edits[r.id]?.end_time   || null,
+      venue:      edits[r.id]?.venue      || null,
+    }));
+
+    setSaving(true);
+    try {
+      await updateDateSheet(examId, { schedules });
+      toast.success('Date sheet saved');
+      // Refresh to confirm DB values
+      const res = await getDateSheet(examId, classId ? { class_id: classId } : {});
+      setRows(res.data?.rows ?? []);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const hasEdits = rows.length > 0;
+  const printURL = examId
+    ? `/exams/${examId}/date-sheet/print${classId ? `?class_id=${classId}` : ''}`
+    : null;
+
+  return (
+    <div className="space-y-5">
+      {/* Controls */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5">
+        <div className="flex flex-wrap items-end gap-3">
+          {/* Exam selector */}
+          <div className="min-w-56">
+            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Exam</label>
+            <div className="relative">
+              <select value={examId} onChange={e => { setExamId(e.target.value); setClassId(''); }}
+                className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-100 appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500/30">
+                <option value="">— Select Exam —</option>
+                {exams.map(e => (
+                  <option key={e.id} value={e.id}>{e.exam_name} ({e.academic_year})</option>
+                ))}
+              </select>
+              <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Class filter */}
+          <div className="min-w-44">
+            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Filter by Class</label>
+            <div className="relative">
+              <select value={classId} onChange={e => setClassId(e.target.value)} disabled={!examId}
+                className="w-full pl-3 pr-8 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-100 appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500/30 disabled:opacity-50">
+                <option value="">All Classes</option>
+                {classes.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 ml-auto">
+            {printURL && (
+              <button onClick={() => window.open(printURL, '_blank')}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                <Printer size={15} /> Print
+              </button>
+            )}
+            {hasEdits && (
+              <button onClick={handleSave} disabled={saving}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors disabled:opacity-60">
+                {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                {saving ? 'Saving…' : 'Save Schedule'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Exam meta banner */}
+        {exam && (
+          <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700 flex flex-wrap gap-4 text-xs text-slate-500 dark:text-slate-400">
+            <span><span className="font-semibold text-slate-700 dark:text-slate-300">Exam:</span> {exam.exam_name}</span>
+            <span><span className="font-semibold text-slate-700 dark:text-slate-300">Type:</span> {exam.exam_type?.replace('_', ' ')}</span>
+            <span><span className="font-semibold text-slate-700 dark:text-slate-300">Year:</span> {exam.academic_year}</span>
+            {exam.start_date && <span><span className="font-semibold text-slate-700 dark:text-slate-300">Window:</span> {exam.start_date?.slice(0,10)} → {exam.end_date?.slice(0,10)}</span>}
+          </div>
+        )}
+      </div>
+
+      {/* No exam selected */}
+      {!examId && (
+        <div className="text-center py-16 text-slate-400 dark:text-slate-500 text-sm">
+          Select an exam above to view or edit its date sheet.
+        </div>
+      )}
+
+      {/* Loading */}
+      {loading && (
+        <div className="flex justify-center py-12">
+          <Loader2 size={28} className="animate-spin text-indigo-500" />
+        </div>
+      )}
+
+      {/* Empty — exam selected but no subjects configured */}
+      {!loading && examId && rows.length === 0 && (
+        <div className="text-center py-14 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
+          <CalendarDays size={36} className="mx-auto text-slate-300 dark:text-slate-600 mb-3" />
+          <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">No subjects configured</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Add subjects in the Marks Config tab first, then return here to schedule dates.</p>
+        </div>
+      )}
+
+      {/* Date sheet grid */}
+      {!loading && rows.length > 0 && (
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <h3 className="text-sm font-bold text-slate-800 dark:text-white">
+              {rows.length} Subject{rows.length !== 1 ? 's' : ''}
+            </h3>
+            <span className="text-xs text-slate-400">Edit dates inline, then click Save Schedule</span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-100 dark:border-slate-700">
+                  {['Subject', 'Class', 'Date', 'Start', 'End', 'Venue'].map(h => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(row => {
+                  const e = edits[row.id] ?? {};
+                  const isScheduled = !!e.exam_date;
+                  return (
+                    <tr key={row.id}
+                      className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/40 dark:hover:bg-slate-700/20 transition-colors">
+
+                      {/* Subject */}
+                      <td className="px-4 py-3">
+                        <span className="font-semibold text-slate-800 dark:text-white">{row.subject_name}</span>
+                        {row.subject_code && (
+                          <span className="ml-1.5 text-xs text-slate-400">({row.subject_code})</span>
+                        )}
+                      </td>
+
+                      {/* Class */}
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                        {row.class_name}
+                      </td>
+
+                      {/* Date */}
+                      <td className="px-4 py-3">
+                        <DatePicker
+                          value={e.exam_date || ''}
+                          onChange={v => setField(row.id, 'exam_date', v)}
+                          min={exam?.start_date?.slice(0,10)}
+                          max={exam?.end_date?.slice(0,10)}
+                          className="w-44"
+                        />
+                      </td>
+
+                      {/* Start time */}
+                      <td className="px-4 py-3">
+                        <input type="time" value={e.start_time || ''}
+                          onChange={ev => setField(row.id, 'start_time', ev.target.value)}
+                          className="w-28 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                      </td>
+
+                      {/* End time */}
+                      <td className="px-4 py-3">
+                        <input type="time" value={e.end_time || ''}
+                          onChange={ev => setField(row.id, 'end_time', ev.target.value)}
+                          className="w-28 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                      </td>
+
+                      {/* Venue */}
+                      <td className="px-4 py-3">
+                        <input type="text" value={e.venue || ''} placeholder="Room / Hall"
+                          onChange={ev => setField(row.id, 'venue', ev.target.value)}
+                          className="w-32 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Bottom save bar */}
+          <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+            <button onClick={handleSave} disabled={saving}
+              className="flex items-center gap-2 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors disabled:opacity-60">
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              {saving ? 'Saving…' : 'Save Schedule'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

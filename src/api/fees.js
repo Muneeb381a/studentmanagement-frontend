@@ -68,3 +68,7 @@ export const sendFeeReminders = (data = {}) => api.post('/fees/send-reminders', 
 
 // Student fee account (full ledger — student info + invoices + payments + concessions)
 export const getStudentFeeAccount = (id) => api.get(`/fees/reports/student/${id}`);
+
+// Sibling vouchers
+export const getSiblingGroups  = (billing_month) => api.get('/fees/sibling-groups',  { params: { billing_month } });
+export const getSiblingVoucher = (billing_month, father_cnic) => api.get('/fees/sibling-voucher', { params: { billing_month, father_cnic } });

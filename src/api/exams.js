@@ -31,3 +31,7 @@ export const getClassReportCards      = (examId, classId)  => api.get(`/exams/${
 
 // ── Student Performance (longitudinal) ─────────────────────
 export const getStudentPerformance = (studentId) => api.get(`/exams/student/${studentId}/performance`);
+
+// ── Date Sheet ──────────────────────────────────────────────
+export const getDateSheet    = (examId, params = {}) => api.get(`/exams/${examId}/date-sheet`, { params });
+export const updateDateSheet = (examId, data)        => api.patch(`/exams/${examId}/date-sheet`, data);

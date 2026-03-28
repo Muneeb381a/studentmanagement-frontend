@@ -4,19 +4,31 @@ import toast from 'react-hot-toast';
 import {
   School, CalendarDays, Plus, CheckCircle2, Trash2, X,
   DatabaseBackup, Download, Upload, AlertTriangle, ShieldCheck,
-  ImagePlus, Trash,
+  ImagePlus, Trash, Webhook, Copy, ChevronDown, ChevronUp,
+  FlaskConical, CheckCheck, XCircle, Clock,
 } from 'lucide-react';
 import {
   getSettings, saveSettings,
   getAcademicYears, createAcademicYear, setActiveYear, deleteAcademicYear,
   uploadLogo, deleteLogo,
+  getWebhooks, createWebhook, updateWebhook, deleteWebhook, testWebhook, getWebhookLogs,
 } from '../api/settings';
 import { downloadBackup, restoreBackup } from '../api/backup';
 
 const TABS = [
   { id: 'school',   label: 'School Info',      icon: School },
   { id: 'academic', label: 'Academic Years',   icon: CalendarDays },
+  { id: 'webhooks', label: 'Webhooks',         icon: Webhook },
   { id: 'backup',   label: 'Backup & Restore', icon: DatabaseBackup },
+];
+
+const WEBHOOK_EVENTS = [
+  { value: 'fee.paid',         label: 'Fee Paid',           desc: 'Invoice fully paid' },
+  { value: 'fee.partial',      label: 'Partial Payment',    desc: 'Partial fee received' },
+  { value: 'salary.paid',      label: 'Salary Paid',        desc: 'Teacher salary marked paid' },
+  { value: 'salary.generated', label: 'Salary Generated',   desc: 'Monthly salaries generated' },
+  { value: 'student.enrolled', label: 'Student Enrolled',   desc: 'New student admitted' },
+  { value: 'student.promoted', label: 'Students Promoted',  desc: 'Class promotion completed' },
 ];
 
 /* ─── Shared style helpers ─────────────────────────────────────── */
@@ -525,6 +537,352 @@ function BackupTab({ dark }) {
   );
 }
 
+/* ─── Webhooks Tab ─────────────────────────────────────────────── */
+function WebhooksTab({ dark }) {
+  const s = useStyles(dark);
+  const [hooks,       setHooks]       = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [modalOpen,   setModalOpen]   = useState(false);
+  const [editing,     setEditing]     = useState(null);   // null = add, object = edit
+  const [form,        setForm]        = useState({ url: '', description: '', events: [], is_active: true });
+  const [saving,      setSaving]      = useState(false);
+  const [testing,     setTesting]     = useState({});     // { [id]: bool }
+  const [logsOpen,    setLogsOpen]    = useState(null);   // webhook id
+  const [logs,        setLogs]        = useState([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [copied,      setCopied]      = useState(null);   // webhook id
+
+  const load = useCallback(() => {
+    setLoading(true);
+    getWebhooks()
+      .then(r => setHooks(Array.isArray(r.data?.data ?? r.data) ? (r.data?.data ?? r.data) : []))
+      .catch(() => toast.error('Failed to load webhooks'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const openAdd = () => {
+    setEditing(null);
+    setForm({ url: '', description: '', events: [], is_active: true });
+    setModalOpen(true);
+  };
+
+  const openEdit = (wh) => {
+    setEditing(wh);
+    setForm({ url: wh.url, description: wh.description || '', events: wh.events || [], is_active: wh.is_active });
+    setModalOpen(true);
+  };
+
+  const toggleEvent = (val) => {
+    setForm(f => ({
+      ...f,
+      events: f.events.includes(val) ? f.events.filter(e => e !== val) : [...f.events, val],
+    }));
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!form.url.trim()) return toast.error('URL is required');
+    if (form.events.length === 0) return toast.error('Select at least one event');
+    setSaving(true);
+    try {
+      if (editing) {
+        await updateWebhook(editing.id, form);
+        toast.success('Webhook updated');
+      } else {
+        await createWebhook(form);
+        toast.success('Webhook created');
+      }
+      setModalOpen(false);
+      load();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to save webhook');
+    } finally { setSaving(false); }
+  };
+
+  const handleDelete = async (id) => {
+    try { await deleteWebhook(id); toast.success('Webhook deleted'); load(); }
+    catch { toast.error('Failed to delete webhook'); }
+  };
+
+  const handleTest = async (id) => {
+    setTesting(t => ({ ...t, [id]: true }));
+    try {
+      const res = await testWebhook(id);
+      const http = res.data?.data?.http_status;
+      if (http && http >= 200 && http < 300) toast.success(`Test delivered — HTTP ${http}`);
+      else toast.error(`Test failed — HTTP ${http ?? 'timeout'}`);
+    } catch { toast.error('Test delivery failed'); }
+    finally { setTesting(t => ({ ...t, [id]: false })); }
+  };
+
+  const openLogs = async (id) => {
+    setLogsOpen(id); setLogs([]); setLogsLoading(true);
+    try {
+      const res = await getWebhookLogs(id);
+      setLogs(Array.isArray(res.data?.data ?? res.data) ? (res.data?.data ?? res.data) : []);
+    } catch { toast.error('Failed to load logs'); }
+    finally { setLogsLoading(false); }
+  };
+
+  const copySecret = (id, secret) => {
+    navigator.clipboard.writeText(secret).then(() => {
+      setCopied(id);
+      setTimeout(() => setCopied(null), 2000);
+    });
+  };
+
+  const statusColor = (status) => {
+    if (status === 'success') return dark ? 'text-emerald-400' : 'text-emerald-600';
+    if (status === 'failed')  return dark ? 'text-red-400'     : 'text-red-600';
+    return dark ? 'text-slate-400' : 'text-slate-500';
+  };
+
+  const StatusIcon = ({ status }) => {
+    if (status === 'success') return <CheckCheck size={13} className={statusColor(status)} />;
+    if (status === 'failed')  return <XCircle    size={13} className={statusColor(status)} />;
+    return <Clock size={13} className={statusColor(status)} />;
+  };
+
+  return (
+    <div className="max-w-3xl">
+
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <p className={`text-sm font-semibold ${dark ? 'text-white' : 'text-slate-800'}`}>Webhook Endpoints</p>
+          <p className={s.muted}>Receive real-time HTTP notifications for key events.</p>
+        </div>
+        <button
+          onClick={openAdd}
+          className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold transition"
+        >
+          <Plus size={14} /> Add Webhook
+        </button>
+      </div>
+
+      {/* Info banner */}
+      <div className={`flex gap-3 p-3.5 rounded-xl border mb-5 text-xs leading-relaxed ${dark ? 'bg-slate-700/50 border-slate-600 text-slate-300' : 'bg-indigo-50 border-indigo-200 text-indigo-800'}`}>
+        <ShieldCheck size={15} className="shrink-0 mt-0.5 text-indigo-500" />
+        Each request is signed with <code className="mx-1 font-mono bg-black/10 px-1 rounded">X-Webhook-Signature: sha256=&lt;hex&gt;</code>. Verify it with your endpoint's secret to ensure authenticity.
+      </div>
+
+      {/* List */}
+      {loading ? (
+        <div className="py-12 text-center"><div className="w-7 h-7 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto" /></div>
+      ) : hooks.length === 0 ? (
+        <div className={`py-12 text-center rounded-2xl border-2 border-dashed ${dark ? 'border-slate-700 text-slate-500' : 'border-slate-200 text-slate-400'}`}>
+          <Webhook size={32} className="mx-auto mb-2 opacity-40" />
+          <p className="text-sm">No webhooks configured</p>
+          <button onClick={openAdd} className="mt-3 text-xs text-indigo-500 hover:underline">Add your first webhook →</button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {hooks.map(wh => (
+            <div key={wh.id} className={`rounded-2xl border p-4 ${dark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+              <div className="flex items-start gap-3">
+                <div className={`p-2 rounded-xl shrink-0 ${dark ? 'bg-slate-700' : 'bg-slate-100'}`}>
+                  <Webhook size={16} className={dark ? 'text-indigo-400' : 'text-indigo-600'} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`font-mono text-sm font-semibold truncate ${dark ? 'text-white' : 'text-slate-800'}`}>{wh.url}</span>
+                    <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-semibold ${wh.is_active
+                      ? dark ? 'bg-emerald-900/40 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                      : dark ? 'bg-slate-700 text-slate-400'         : 'bg-slate-100 text-slate-500'}`}>
+                      {wh.is_active ? 'Active' : 'Paused'}
+                    </span>
+                  </div>
+                  {wh.description && <p className={`text-xs mt-0.5 ${s.muted}`}>{wh.description}</p>}
+
+                  {/* Event chips */}
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {(wh.events || []).map(ev => (
+                      <span key={ev} className={`text-xs px-2 py-0.5 rounded-full font-medium ${dark ? 'bg-indigo-900/40 text-indigo-300' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'}`}>
+                        {ev}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Stats */}
+                  <div className={`flex gap-4 mt-2 text-xs ${s.muted}`}>
+                    {wh.total_deliveries > 0 && (
+                      <>
+                        <span>{wh.total_deliveries} deliveries</span>
+                        <span className={dark ? 'text-emerald-400' : 'text-emerald-600'}>{wh.successful} ok</span>
+                        {wh.last_fired_at && <span>Last: {new Date(wh.last_fired_at).toLocaleString('en-PK', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    title="Copy secret"
+                    onClick={() => copySecret(wh.id, wh.secret)}
+                    className={`p-1.5 rounded-lg transition ${dark ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}
+                  >
+                    {copied === wh.id ? <CheckCheck size={14} className="text-emerald-500" /> : <Copy size={14} />}
+                  </button>
+                  <button
+                    title="Test webhook"
+                    disabled={testing[wh.id]}
+                    onClick={() => handleTest(wh.id)}
+                    className={`p-1.5 rounded-lg transition disabled:opacity-50 ${dark ? 'hover:bg-slate-700 text-slate-400 hover:text-indigo-400' : 'hover:bg-slate-100 text-slate-400 hover:text-indigo-600'}`}
+                  >
+                    {testing[wh.id]
+                      ? <div className="w-3.5 h-3.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                      : <FlaskConical size={14} />}
+                  </button>
+                  <button
+                    title="Delivery logs"
+                    onClick={() => logsOpen === wh.id ? setLogsOpen(null) : openLogs(wh.id)}
+                    className={`p-1.5 rounded-lg transition ${logsOpen === wh.id
+                      ? dark ? 'bg-slate-600 text-white' : 'bg-slate-200 text-slate-700'
+                      : dark ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'}`}
+                  >
+                    {logsOpen === wh.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </button>
+                  <button
+                    title="Edit"
+                    onClick={() => openEdit(wh)}
+                    className={`px-2 py-1.5 rounded-lg text-xs font-semibold transition ${dark ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-800'}`}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    title="Delete"
+                    onClick={() => handleDelete(wh.id)}
+                    className={`p-1.5 rounded-lg transition ${dark ? 'hover:bg-red-900/30 text-slate-400 hover:text-red-400' : 'hover:bg-red-50 text-slate-400 hover:text-red-600'}`}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Logs drawer */}
+              {logsOpen === wh.id && (
+                <div className={`mt-4 pt-4 border-t ${dark ? 'border-slate-700' : 'border-slate-200'}`}>
+                  <p className={`text-xs font-bold uppercase tracking-wider mb-3 ${dark ? 'text-slate-400' : 'text-slate-500'}`}>Last 50 Deliveries</p>
+                  {logsLoading ? (
+                    <div className="py-4 text-center"><div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto" /></div>
+                  ) : logs.length === 0 ? (
+                    <p className={`text-xs text-center py-4 ${s.muted}`}>No deliveries yet</p>
+                  ) : (
+                    <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+                      {logs.map(lg => (
+                        <div key={lg.id} className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs ${dark ? 'bg-slate-700/50' : 'bg-slate-50'}`}>
+                          <StatusIcon status={lg.status} />
+                          <span className={`font-mono font-semibold ${dark ? 'text-indigo-300' : 'text-indigo-700'}`}>{lg.event}</span>
+                          <span className={statusColor(lg.status)}>{lg.status}</span>
+                          {lg.http_status && <span className={s.muted}>HTTP {lg.http_status}</span>}
+                          {lg.duration_ms && <span className={s.muted}>{lg.duration_ms}ms</span>}
+                          <span className={`ml-auto ${s.muted}`}>{new Date(lg.fired_at).toLocaleString('en-PK', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add / Edit Modal */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className={`w-full max-w-lg rounded-2xl shadow-2xl border ${dark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+            <div className={`flex items-center justify-between p-5 border-b ${dark ? 'border-slate-700' : 'border-slate-200'}`}>
+              <h2 className={`font-bold text-base ${dark ? 'text-white' : 'text-slate-800'}`}>
+                {editing ? 'Edit Webhook' : 'New Webhook'}
+              </h2>
+              <button onClick={() => setModalOpen(false)} className={`p-1.5 rounded-lg ${dark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-100 text-slate-500'}`}>
+                <X size={16} />
+              </button>
+            </div>
+            <form onSubmit={handleSave} className="p-5 space-y-4">
+              <div>
+                <label className={s.lbl}>Endpoint URL *</label>
+                <input
+                  className={s.inp}
+                  value={form.url}
+                  onChange={e => setForm(f => ({ ...f, url: e.target.value }))}
+                  placeholder="https://example.com/webhook"
+                />
+              </div>
+              <div>
+                <label className={s.lbl}>Description</label>
+                <input
+                  className={s.inp}
+                  value={form.description}
+                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Optional note about this endpoint"
+                />
+              </div>
+              <div>
+                <label className={`${s.lbl} mb-2.5`}>Subscribe to Events *</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {WEBHOOK_EVENTS.map(ev => {
+                    const checked = form.events.includes(ev.value);
+                    return (
+                      <label
+                        key={ev.value}
+                        className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition ${checked
+                          ? dark ? 'bg-indigo-900/30 border-indigo-600' : 'bg-indigo-50 border-indigo-300'
+                          : dark ? 'border-slate-600 hover:border-slate-500' : 'border-slate-200 hover:border-slate-300'}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleEvent(ev.value)}
+                          className="mt-0.5 accent-indigo-600"
+                        />
+                        <div>
+                          <p className={`text-xs font-semibold ${dark ? 'text-white' : 'text-slate-800'}`}>{ev.label}</p>
+                          <p className={`text-xs ${s.muted}`}>{ev.desc}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <label className={`${s.lbl} mb-0`}>Active</label>
+                <button
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, is_active: !f.is_active }))}
+                  className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${form.is_active ? 'bg-indigo-600' : dark ? 'bg-slate-600' : 'bg-slate-300'}`}
+                >
+                  <span className={`inline-block h-4 w-4 m-0.5 rounded-full bg-white shadow transition-transform ${form.is_active ? 'translate-x-4' : 'translate-x-0'}`} />
+                </button>
+              </div>
+              <div className={`flex gap-3 pt-2 border-t ${dark ? 'border-slate-700' : 'border-slate-200'}`}>
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(false)}
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition ${dark ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white transition disabled:opacity-60"
+                >
+                  {saving ? 'Saving…' : editing ? 'Save Changes' : 'Create Webhook'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Main Settings Page ───────────────────────────────────────── */
 export default function SettingsPage() {
   const { isDark: dark } = useTheme();   // ← fixed: was `dark` (undefined), now `isDark`
@@ -574,6 +932,7 @@ export default function SettingsPage() {
         <div className={`flex-1 rounded-2xl border p-6 ${cardBg}`}>
           {tab === 'school'   && <SchoolSettingsTab dark={dark} />}
           {tab === 'academic' && <AcademicYearsTab dark={dark} />}
+          {tab === 'webhooks' && <WebhooksTab dark={dark} />}
           {tab === 'backup'   && <BackupTab dark={dark} />}
         </div>
 

@@ -48,7 +48,7 @@ export default function LoginPage() {
   };
 
   const fillDemo = (username, password) => {
-    setForm({ username, password });
+    setForm(f => ({ ...f, username, password }));
   };
 
   return (

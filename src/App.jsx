@@ -31,6 +31,7 @@ import ReportCardPrintPage   from './pages/ReportCardPrintPage';
 import PaperPrintPage        from './pages/PaperPrintPage';
 import ExamDateSheetPrint    from './pages/ExamDateSheetPrint';
 import StudentIdCardPage    from './pages/StudentIdCardPage';
+import TeacherIdCardPage    from './pages/TeacherIdCardPage';
 import CertificatePrintPage from './pages/CertificatePrintPage';
 import AnnouncementsPage  from './pages/AnnouncementsPage';
 import ExpensesPage       from './pages/ExpensesPage';
@@ -78,7 +79,7 @@ import QuizzesPage              from './pages/QuizzesPage';
 import QuizTakePage             from './pages/QuizTakePage';
 import QuizResultsPage          from './pages/QuizResultsPage';
 import OnlineClassesPage        from './pages/OnlineClassesPage';
-
+import AcademicCalendarPage     from './pages/AcademicCalendarPage';
 /* Redirect / → role-appropriate home */
 function RoleRedirect() {
   const { user } = useAuth();
@@ -124,6 +125,13 @@ export default function App() {
               </ProtectedRoute>
             } />
 
+            {/* Academic Calendar — visible to all authenticated roles */}
+            <Route path="/calendar" element={
+              <ProtectedRoute>
+                <AcademicCalendarPage />
+              </ProtectedRoute>
+            } />
+
             {/* Admin-only pages */}
             <Route path="/students" element={
               <ProtectedRoute roles={['admin', 'teacher']}>
@@ -133,6 +141,11 @@ export default function App() {
             <Route path="/students/id-cards" element={
               <ProtectedRoute roles={['admin']}>
                 <StudentIdCardPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/teachers/id-cards" element={
+              <ProtectedRoute roles={['admin']}>
+                <TeacherIdCardPage />
               </ProtectedRoute>
             } />
             <Route path="/students/certificate" element={

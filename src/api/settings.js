@@ -13,3 +13,11 @@ export const uploadLogo = (file) => {
   return api.post('/settings/logo', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
 };
 export const deleteLogo = () => api.delete('/settings/logo');
+
+// Webhooks
+export const getWebhooks    = ()         => api.get('/settings/webhooks');
+export const createWebhook  = (data)     => api.post('/settings/webhooks', data);
+export const updateWebhook  = (id, data) => api.put(`/settings/webhooks/${id}`, data);
+export const deleteWebhook  = (id)       => api.delete(`/settings/webhooks/${id}`);
+export const testWebhook    = (id)       => api.post(`/settings/webhooks/${id}/test`);
+export const getWebhookLogs = (id)       => api.get(`/settings/webhooks/${id}/logs`);

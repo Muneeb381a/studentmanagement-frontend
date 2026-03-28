@@ -5,7 +5,7 @@ import {
   ClipboardList, Banknote, CalendarDays, ClipboardCheck,
   TrendingUp, Activity, Library, FileBarChart2, ChevronRight,
   AlertTriangle, CheckCircle2, Clock3, Wallet, DollarSign,
-  Calendar, BookMarked, UserX, BarChart3, RefreshCw, Video,
+  Calendar, BookMarked, UserX, BarChart3, RefreshCw, Video, Sun,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Layout from '../components/layout/Layout';
@@ -240,6 +240,10 @@ export default function DashboardPage() {
   const onlineClasses = useMemo(() => data?.online_classes ?? [], [data?.online_classes]);
   const feeStats      = useMemo(() => data?.fee_summary ?? null, [data?.fee_summary]);
 
+  const unmarkedCount = Array.isArray(today?.unmarked_classes)
+    ? today.unmarked_classes.length
+    : (today?.unmarked_classes ?? 0);
+
   // ── Derived percentages (memoized) ──────────────────────
   const { malePct, femalePct, otherPct } = useMemo(() => {
     const m = toPct(counts.males,   counts.total);
@@ -414,6 +418,68 @@ export default function DashboardPage() {
               <RefreshCw size={12} className={statsRefreshing ? 'animate-spin' : ''} />
               Refresh live data
             </button>
+          </div>
+
+          {/* ══ TODAY AT A GLANCE ══ */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center shrink-0">
+                <Sun size={14} className="text-amber-500" />
+              </div>
+              <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">Today at a Glance</span>
+              <span className="ml-auto text-xs text-slate-400 font-medium">
+                {new Date().toLocaleDateString('en-PK', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' })}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y sm:divide-y-0 divide-slate-100 dark:divide-slate-800/60">
+
+              {/* Attendance today */}
+              <div className="px-5 py-4">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Attendance</p>
+                <p className="text-2xl font-extrabold leading-none"
+                  style={{ color: kpis?.attendance_today_pct == null ? '#94a3b8' : kpis.attendance_today_pct >= 75 ? '#10b981' : kpis.attendance_today_pct >= 50 ? '#f59e0b' : '#ef4444' }}>
+                  {kpis?.attendance_today_pct != null ? `${kpis.attendance_today_pct}%` : '—'}
+                </p>
+                <p className="text-xs text-slate-400 mt-1 truncate">
+                  {kpis ? `${kpis.attendance_present} / ${kpis.attendance_total} present` : 'Not recorded yet'}
+                </p>
+              </div>
+
+              {/* Unmarked classes */}
+              <div className="px-5 py-4">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Unmarked Classes</p>
+                <p className={`text-2xl font-extrabold leading-none ${today == null ? 'text-slate-400' : unmarkedCount > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                  {today == null ? '—' : unmarkedCount}
+                </p>
+                <p className="text-xs text-slate-400 mt-1">
+                  {today == null ? 'Loading…' : unmarkedCount > 0 ? 'Need attendance' : 'All marked'}
+                </p>
+              </div>
+
+              {/* Events this week */}
+              <div className="px-5 py-4">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Events This Week</p>
+                <p className="text-2xl font-extrabold leading-none text-blue-500">
+                  {today?.upcoming_events?.length ?? '—'}
+                </p>
+                <p className="text-xs text-slate-400 mt-1 truncate">
+                  {today?.upcoming_events?.[0]?.title
+                    ?? (today?.upcoming_events?.length > 0 ? 'Upcoming event' : 'No events scheduled')}
+                </p>
+              </div>
+
+              {/* Overdue homework */}
+              <div className="px-5 py-4">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Overdue Homework</p>
+                <p className={`text-2xl font-extrabold leading-none ${today == null ? 'text-slate-400' : (today.overdue_homework ?? 0) > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>
+                  {today == null ? '—' : (today.overdue_homework ?? 0)}
+                </p>
+                <p className="text-xs text-slate-400 mt-1">
+                  {today == null ? 'Loading…' : (today.overdue_homework ?? 0) > 0 ? 'Assignments past due' : 'All on time'}
+                </p>
+              </div>
+
+            </div>
           </div>
 
           {/* ══ MAIN GRID ══ */}

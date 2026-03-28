@@ -12,3 +12,7 @@ export const getSalarySlip         = (id)         => api.get(`/salary/payments/$
 export const updateSalaryPayment   = (id, data)   => api.put(`/salary/payments/${id}`, data);
 export const markSalaryPaid        = (id, data)   => api.post(`/salary/payments/${id}/mark-paid`, data);
 export const bulkMarkSalaryPaid    = (data)        => api.post('/salary/payments/bulk-mark-paid', data);
+
+// ── Salary Policy ─────────────────────────────────────────────
+export const getSalaryPolicy    = ()     => api.get('/salary/policy');
+export const updateSalaryPolicy = (data) => api.put('/salary/policy', data);

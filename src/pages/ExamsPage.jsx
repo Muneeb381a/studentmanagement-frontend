@@ -6,6 +6,7 @@ import {
   Calendar, AlertCircle, CheckCircle2, Clock, TrendingUp, Printer,
   FileEdit, ChevronUp, Loader2, GripVertical, Copy,
   AlertTriangle, Link2, CheckCircle, Lock, Unlock, Info, CalendarDays, Save,
+  FileDown,
 } from 'lucide-react';
 import {
   getPapers, createPaper, updatePaper, deletePaper,
@@ -27,6 +28,7 @@ import {
   getMarks, submitMarks,
   calculateResults, getResults, getStudentReportCard, getClassRanking,
   getDateSheet, updateDateSheet,
+  downloadStudentReportCardPDF, downloadClassReportCardsPDF,
 } from '../api/exams';
 
 import { getClasses }  from '../api/classes';
@@ -918,6 +920,7 @@ function ResultsTab() {
   const [publishing,   setPublishing]   = useState(false);
   const [reportCard,   setReportCard]   = useState(null);
   const [reportOpen,   setReportOpen]   = useState(false);
+  const [pdfLoading,   setPdfLoading]   = useState(false);
 
   useEffect(() => {
     Promise.all([getExams(), getClasses()])
@@ -998,6 +1001,33 @@ function ResultsTab() {
     }
   };
 
+  // ── PDF helpers ──────────────────────────────────────────────────────────
+  function triggerBlobDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement('a');
+    a.href     = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  const downloadClassPDF = async () => {
+    if (!selExam || !selClass) return;
+    setPdfLoading(true);
+    const tid = toast.loading('Generating PDF…');
+    try {
+      const res = await downloadClassReportCardsPDF(selExam, selClass);
+      triggerBlobDownload(res.data, `report-cards-class-${selClass}-exam-${selExam}.pdf`);
+      toast.success('PDF downloaded', { id: tid });
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'PDF generation failed', { id: tid });
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
   const passCount = results.filter(r => r.result_status === 'pass').length;
   const failCount = results.filter(r => r.result_status === 'fail').length;
 
@@ -1022,14 +1052,22 @@ function ResultsTab() {
           </Button>
         )}
         {results.length > 0 && selExam && selClass && (
-          <Button
-            onClick={() => {
-              const p = new URLSearchParams({ type: 'class', exam_id: selExam, class_id: selClass });
-              window.open(`/exams/report-card/print?${p}`, '_blank');
-            }}
-            style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
-            <Printer size={14} /> Print All Report Cards
-          </Button>
+          <>
+            <Button
+              onClick={() => {
+                const p = new URLSearchParams({ type: 'class', exam_id: selExam, class_id: selClass });
+                window.open(`/exams/report-card/print?${p}`, '_blank');
+              }}
+              style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
+              <Printer size={14} /> Print All Report Cards
+            </Button>
+            <Button
+              loading={pdfLoading}
+              onClick={downloadClassPDF}
+              style={{ background: 'linear-gradient(135deg,#0ea5e9,#0284c7)' }}>
+              <FileDown size={14} /> Download Class PDF
+            </Button>
+          </>
         )}
       </div>
 
@@ -1163,6 +1201,29 @@ function ResultsTab() {
 // ─────────────────────────────────────────────────────────────
 function ReportCardModal({ data, onClose }) {
   const { summary, subjects = [] } = data;
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  const handleDownloadPDF = async () => {
+    if (!summary?.exam_id || !summary?.student_id) return;
+    setPdfLoading(true);
+    const tid = toast.loading('Generating PDF…');
+    try {
+      const res = await downloadStudentReportCardPDF(summary.exam_id, summary.student_id);
+      const url  = URL.createObjectURL(res.data);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `report-card_${(summary.full_name || 'student').replace(/\s+/g,'_')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('PDF downloaded', { id: tid });
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'PDF generation failed', { id: tid });
+    } finally {
+      setPdfLoading(false);
+    }
+  };
 
   return (
     <Modal isOpen onClose={onClose} title="Student Report Card" size="lg">
@@ -1290,18 +1351,30 @@ function ReportCardModal({ data, onClose }) {
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-3">
-          <button
-            onClick={() => {
-              if (summary?.exam_id && summary?.student_id) {
-                const p = new URLSearchParams({ type: 'single', exam_id: summary.exam_id, student_id: summary.student_id });
-                window.open(`/exams/report-card/print?${p}`, '_blank');
-              }
-            }}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-white text-sm font-medium"
-            style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
-            <Printer size={13} /> Print Report Card
-          </button>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                if (summary?.exam_id && summary?.student_id) {
+                  const p = new URLSearchParams({ type: 'single', exam_id: summary.exam_id, student_id: summary.student_id });
+                  window.open(`/exams/report-card/print?${p}`, '_blank');
+                }
+              }}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-white text-sm font-medium"
+              style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
+              <Printer size={13} /> Print
+            </button>
+            <button
+              onClick={handleDownloadPDF}
+              disabled={pdfLoading}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-white text-sm font-medium disabled:opacity-60"
+              style={{ background: 'linear-gradient(135deg,#0ea5e9,#0284c7)' }}>
+              {pdfLoading
+                ? <Loader2 size={13} className="animate-spin" />
+                : <FileDown size={13} />}
+              Download PDF
+            </button>
+          </div>
           <Button variant="ghost" onClick={onClose}><X size={14} /> Close</Button>
         </div>
       </div>

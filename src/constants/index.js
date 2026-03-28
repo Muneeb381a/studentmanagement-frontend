@@ -30,248 +30,173 @@ import {
   CalendarCheck,
   Award,
   Users2,
-  RotateCcw,
   FileCheck,
   Video,
+  HardHat,
 } from 'lucide-react';
 
-/* ── Navigation links ── */
+// ─────────────────────────────────────────────────────────────────────────────
+//  NAV_LINKS
+//
+//  Two item shapes:
+//    Flat link  → { label, to, icon, description, adminChildren? }
+//    Group      → { label, icon, color, group: true, children[] }
+//
+//  adminChildren  — shown only as children of Dashboard for admin role.
+//  The corresponding paths (/teacher-dashboard etc.) still live in ROLE_LINKS
+//  for non-admin roles which see them as flat Dashboard links.
+// ─────────────────────────────────────────────────────────────────────────────
 export const NAV_LINKS = [
+
+  // ── Dashboard ─────────────────────────────────────────────────────────────
   {
     label: 'Dashboard',
     to: '/',
     icon: LayoutDashboard,
     description: 'Overview & analytics',
+    adminChildren: [
+      { label: 'Teacher View',  to: '/teacher-dashboard', description: 'Teacher portal view' },
+      { label: 'Student View',  to: '/student-dashboard', description: 'Student portal view' },
+      { label: 'Parent View',   to: '/parent-dashboard',  description: 'Parent portal view' },
+    ],
   },
+
+  // Role-specific dashboards (rendered as flat for teacher / student / parent)
+  { label: 'Dashboard', to: '/teacher-dashboard', icon: LayoutDashboard, description: 'Teacher portal', adminSkip: true },
+  { label: 'Dashboard', to: '/student-dashboard', icon: LayoutDashboard, description: 'Student portal',  adminSkip: true },
+  { label: 'Dashboard', to: '/parent-dashboard',  icon: LayoutDashboard, description: 'My child overview', adminSkip: true },
+
+  // ── People ────────────────────────────────────────────────────────────────
   {
-    label: 'Teacher View',
-    to: '/teacher-dashboard',
-    icon: LayoutDashboard,
-    description: 'Teacher portal view',
-    adminChild: true,
-  },
-  {
-    label: 'Student View',
-    to: '/student-dashboard',
-    icon: LayoutDashboard,
-    description: 'Student portal view',
-    adminChild: true,
-  },
-  {
-    label: 'Dashboard',
-    to: '/parent-dashboard',
-    icon: LayoutDashboard,
-    description: 'My child overview',
-  },
-  {
-    label: 'Students',
-    to: '/students',
+    label: 'People',
     icon: Users,
-    description: 'Manage enrolled students',
+    color: '#0ea5e9',
+    group: true,
+    children: [
+      { label: 'Students',    to: '/students',      icon: Users,        description: 'Enrolled students' },
+      { label: 'Admissions',  to: '/admission/new', icon: ClipboardList, description: 'New enrollment' },
+      { label: 'Teachers',     to: '/teachers',      icon: GraduationCap, description: 'Staff & assignments' },
+      { label: 'Support Staff',to: '/staff',         icon: HardHat,       description: 'Non-teaching staff' },
+      { label: 'Staff Leaves', to: '/leaves',        icon: CalendarDays,  description: 'Leave management' },
+      { label: 'Alumni',       to: '/alumni',        icon: Users2,        description: 'Graduated students' },
+    ],
   },
+
+  // ── Academic ──────────────────────────────────────────────────────────────
   {
-    label: 'Teachers',
-    to: '/teachers',
-    icon: GraduationCap,
-    description: 'Staff & assignments',
-  },
-  {
-    label: 'Classes',
-    to: '/classes',
+    label: 'Academic',
     icon: BookOpen,
-    description: 'Classes & sections',
+    color: '#8b5cf6',
+    group: true,
+    children: [
+      { label: 'Classes',   to: '/classes',   icon: BookOpen,    description: 'Classes & sections' },
+      { label: 'Subjects',  to: '/subjects',  icon: Library,     description: 'Subjects & teachers' },
+      { label: 'Timetable', to: '/timetable', icon: CalendarDays, description: 'Class schedules' },
+      { label: 'Syllabus',  to: '/syllabus',  icon: ListChecks,  description: 'Curriculum tracking' },
+    ],
   },
-  {
-    label: 'Timetable',
-    to: '/timetable',
-    icon: CalendarDays,
-    description: 'Class schedules & periods',
-  },
+
+  // ── Attendance ────────────────────────────────────────────────────────────
   {
     label: 'Attendance',
-    to: '/attendance',
     icon: ClipboardCheck,
-    description: 'Daily attendance tracking',
+    color: '#10b981',
+    group: true,
+    children: [
+      { label: 'Attendance',    to: '/attendance',   icon: ClipboardCheck, description: 'Daily tracking' },
+      { label: 'Late Arrivals', to: '/late-arrivals', icon: Clock,         description: 'Late arrival register' },
+    ],
   },
-  {
-    label: 'Subjects',
-    to: '/subjects',
-    icon: Library,
-    description: 'Subjects & teacher assignments',
-  },
+
+  // ── Exams ─────────────────────────────────────────────────────────────────
   {
     label: 'Exams',
-    to: '/exams',
     icon: FileBarChart2,
-    description: 'Exams, marks & results',
+    color: '#f59e0b',
+    group: true,
+    children: [
+      { label: 'Exams',       to: '/exams',       icon: FileBarChart2, description: 'Marks & results' },
+      { label: 'Board Exams', to: '/board-exams', icon: GraduationCap, description: 'BISE registrations' },
+      { label: 'Quizzes',     to: '/quizzes',     icon: FileCheck,     description: 'Online assessments' },
+    ],
   },
+
+  // ── Finance ───────────────────────────────────────────────────────────────
   {
-    label: 'Announcements',
-    to: '/announcements',
-    icon: Megaphone,
-    description: 'Notices & announcements',
-  },
-  {
-    label: 'Expenses',
-    to: '/expenses',
-    icon: TrendingDown,
-    description: 'School spending & accounting',
-  },
-  {
-    label: 'Transport',
-    to: '/transport',
-    icon: Bus,
-    description: 'Buses, routes & assignments',
-  },
-  {
-    label: 'Library',
-    to: '/library',
-    icon: BookMarked,
-    description: 'Books, issues & fines',
-  },
-  {
-    label: 'Fees',
-    to: '/fees',
+    label: 'Finance',
     icon: Banknote,
-    description: 'Fee management & payments',
+    color: '#059669',
+    group: true,
+    children: [
+      { label: 'Fees',         to: '/fees',          icon: Banknote,     description: 'Fee management' },
+      { label: 'Salary',       to: '/salary',        icon: DollarSign,   description: 'Teacher payroll' },
+      { label: 'Expenses',     to: '/expenses',      icon: TrendingDown, description: 'School spending' },
+      { label: 'Income',       to: '/income',        icon: TrendingUp,   description: 'Revenue tracking' },
+      { label: 'Scholarships', to: '/scholarships',  icon: Award,        description: 'Concessions' },
+    ],
   },
+
+  // ── Communication ─────────────────────────────────────────────────────────
   {
-    label: 'Salary',
-    to: '/salary',
-    icon: DollarSign,
-    description: 'Teacher payroll & pay slips',
+    label: 'Communication',
+    icon: MessageSquare,
+    color: '#ec4899',
+    group: true,
+    children: [
+      { label: 'Announcements', to: '/announcements', icon: Megaphone,     description: 'Notices & updates' },
+      { label: 'Messages',      to: '/messaging',     icon: MessageSquare, description: 'Direct messaging' },
+      { label: 'Events',        to: '/events',        icon: CalendarRange, description: 'School events' },
+      { label: 'PTM Scheduler', to: '/meetings',      icon: CalendarCheck, description: 'Parent meetings' },
+      { label: 'Diary',         to: '/diary',         icon: BookText,      description: 'Class diary' },
+    ],
   },
+
+  // ── Learning ──────────────────────────────────────────────────────────────
   {
-    label: 'Online Classes',
-    to: '/online-classes',
+    label: 'Learning',
     icon: Video,
-    description: 'Schedule & join virtual classes',
+    color: '#0891b2',
+    group: true,
+    children: [
+      { label: 'Online Classes', to: '/online-classes', icon: Video,       description: 'Virtual classes' },
+      { label: 'Homework',       to: '/homework',       icon: NotebookPen, description: 'Assignments' },
+    ],
   },
+
+  // ── Resources ─────────────────────────────────────────────────────────────
   {
-    label: 'Homework',
-    to: '/homework',
-    icon: NotebookPen,
-    description: 'Assignments & homework',
-  },
-  {
-    label: 'Events',
-    to: '/events',
-    icon: CalendarRange,
-    description: 'School events & holidays',
-  },
-  {
-    label: 'Inventory',
-    to: '/inventory',
+    label: 'Resources',
     icon: Package,
-    description: 'Stock & asset management',
+    color: '#7c3aed',
+    group: true,
+    children: [
+      { label: 'Library',    to: '/library',   icon: BookMarked,  description: 'Books & issues' },
+      { label: 'Inventory',  to: '/inventory', icon: Package,     description: 'Stock & assets' },
+      { label: 'Transport',  to: '/transport', icon: Bus,         description: 'Buses & routes' },
+      { label: 'Canteen',    to: '/canteen',   icon: ShoppingCart, description: 'POS & revenue' },
+      { label: 'Medical',    to: '/medical',   icon: Stethoscope, description: 'Health records' },
+    ],
   },
+
+  // ── Reports ───────────────────────────────────────────────────────────────
   {
-    label: 'Admissions',
-    to: '/admission/new',
-    icon: ClipboardList,
-    description: 'New student enrollment',
+    label: 'Reports',
+    icon: BarChart3,
+    color: '#d97706',
+    group: true,
+    children: [
+      { label: 'Financial',     to: '/analytics/financial',      icon: BarChart3,     description: 'P&L analytics' },
+      { label: 'Annual Report', to: '/analytics/annual-report',  icon: FileText,      description: 'Year summary' },
+      { label: 'Custom Report', to: '/analytics/custom-report',  icon: ClipboardList, description: 'Custom exports' },
+    ],
   },
+
+  // ── Settings (flat) ───────────────────────────────────────────────────────
   {
     label: 'Settings',
     to: '/settings',
     icon: Settings,
-    description: 'School info & academic years',
-  },
-  {
-    label: 'Messages',
-    to: '/messaging',
-    icon: MessageSquare,
-    description: 'Parent & teacher messaging',
-  },
-  {
-    label: 'Diary',
-    to: '/diary',
-    icon: BookText,
-    description: 'Daily class diary & homework',
-  },
-  {
-    label: 'Board Exams',
-    to: '/board-exams',
-    icon: GraduationCap,
-    description: 'BISE exam registrations & results',
-  },
-  {
-    label: 'Income',
-    to: '/income',
-    icon: TrendingUp,
-    description: 'Track tuition, donations & other income',
-  },
-  {
-    label: 'Staff Leaves',
-    to: '/leaves',
-    icon: CalendarDays,
-    description: 'Apply, approve & track teacher leave',
-  },
-  {
-    label: 'Syllabus',
-    to: '/syllabus',
-    icon: ListChecks,
-    description: 'Curriculum topics & completion tracking',
-  },
-  {
-    label: 'Financial Analytics',
-    to: '/analytics/financial',
-    icon: BarChart3,
-    description: 'P&L, expenses & fee collection',
-  },
-  {
-    label: 'Annual Report',
-    to: '/analytics/annual-report',
-    icon: FileText,
-    description: 'School-year summary report',
-  },
-  {
-    label: 'Custom Report',
-    to: '/analytics/custom-report',
-    icon: ClipboardList,
-    description: 'Build & export custom reports',
-  },
-  {
-    label: 'Late Arrivals',
-    to: '/late-arrivals',
-    icon: Clock,
-    description: 'Late student arrival register',
-  },
-  {
-    label: 'Medical Records',
-    to: '/medical',
-    icon: Stethoscope,
-    description: 'Student health & vaccination records',
-  },
-  {
-    label: 'Canteen',
-    to: '/canteen',
-    icon: ShoppingCart,
-    description: 'POS & canteen revenue tracking',
-  },
-  {
-    label: 'PTM Scheduler',
-    to: '/meetings',
-    icon: CalendarCheck,
-    description: 'Parent-teacher meeting slots',
-  },
-  {
-    label: 'Scholarships',
-    to: '/scholarships',
-    icon: Award,
-    description: 'Concession approval workflow',
-  },
-  {
-    label: 'Alumni',
-    to: '/alumni',
-    icon: Users2,
-    description: 'Track graduated students',
-  },
-  {
-    label: 'Quizzes',
-    to: '/quizzes',
-    icon: FileCheck,
-    description: 'Online assessments & tests',
+    description: 'School info & configuration',
   },
 ];
 
@@ -287,7 +212,7 @@ export const STATUS_STYLES = {
 export const GENDER_STYLES = {
   Male:   'bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800/40',
   Female: 'bg-pink-50 text-pink-700 border-pink-100 dark:bg-pink-900/20 dark:text-pink-400 dark:border-pink-800/40',
-  Other:  'bg-purple-50 text-purple-700 border-purple-100 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800/40',
+  Other:  'bg-purple-50 text-purple-700 border-purple-100 dark:bg-purple-900/20 dark:text-purple-400 dark:border-pink-800/40',
 };
 
 /* ── Avatar gradient pairs [from, to] in hex ── */

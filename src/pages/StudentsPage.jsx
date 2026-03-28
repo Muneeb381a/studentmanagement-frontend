@@ -13,6 +13,7 @@ import Badge from '../components/ui/Badge';
 import EmptyState from '../components/ui/EmptyState';
 import Button from '../components/ui/Button';
 import { getStudents, deleteStudent, resetStudentCredentials, promoteStudents, getStudentImportTemplate, importStudents, exportStudents } from '../api/students';
+import Pagination from '../components/ui/Pagination';
 import { getClasses } from '../api/classes';
 import { useDebounce } from '../hooks/useDebounce';
 import { formatDate, toPct, downloadBlob } from '../utils';
@@ -219,6 +220,8 @@ function Chip({ label, onRemove }) {
 export default function StudentsPage() {
   const navigate = useNavigate();
   const [students,      setStudents]      = useState([]);
+  const [meta,          setMeta]          = useState(null);
+  const [page,          setPage]          = useState(1);
   const [classes,       setClasses]       = useState([]);
   const [loading,       setLoading]       = useState(true);
   const [search,        setSearch]        = useState('');
@@ -228,18 +231,23 @@ export default function StudentsPage() {
   const [deleteTarget,  setDeleteTarget]  = useState(null);
   const [showPromote,   setShowPromote]   = useState(false);
   const [showImport,    setShowImport]    = useState(false);
-  const [credStudent,   setCredStudent]   = useState(null); // student whose credentials to manage
+  const [credStudent,   setCredStudent]   = useState(null);
 
   const debouncedSearch = useDebounce(search);
 
   const fetchStudents = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await getStudents({ search: debouncedSearch, status: statusFilter, class_id: classFilter });
-      setStudents(Array.isArray(res.data) ? res.data : []);
+      const res = await getStudents({ search: debouncedSearch, status: statusFilter, class_id: classFilter, page, limit: 50 });
+      const body = res.data;
+      setStudents(Array.isArray(body) ? body : (body?.data ?? []));
+      setMeta(body?.meta ?? null);
     } catch { toast.error('Failed to load students'); }
     finally { setLoading(false); }
-  }, [debouncedSearch, statusFilter, classFilter]);
+  }, [debouncedSearch, statusFilter, classFilter, page]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => { setPage(1); }, [debouncedSearch, statusFilter, classFilter]);
 
   useEffect(() => { getClasses().then(r => setClasses(Array.isArray(r.data) ? r.data : [])).catch(() => {}); }, []);
   useEffect(() => { fetchStudents(); }, [fetchStudents]);
@@ -253,7 +261,7 @@ export default function StudentsPage() {
     } catch { toast.error('Failed to delete student'); }
   };
 
-  const total   = students.length;
+  const total   = meta?.total ?? students.length;
   const active  = students.filter(s => s.status === 'active').length;
   const males   = students.filter(s => s.gender === 'Male').length;
   const females = students.filter(s => s.gender === 'Female').length;
@@ -571,6 +579,9 @@ export default function StudentsPage() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+                <div className="px-4 border-t border-slate-100 dark:border-slate-800">
+                  <Pagination meta={meta} onChange={setPage} />
                 </div>
               </>
             )}

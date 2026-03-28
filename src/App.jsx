@@ -1,85 +1,86 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import { lazy, Suspense } from 'react';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import { PageLoader } from './components/ui/Spinner';
 
-/* Auth */
+/* Auth — kept eager: needed on cold load / redirect */
 import LoginPage          from './pages/LoginPage';
 import ChangePasswordPage from './pages/ChangePasswordPage';
+import SetupPage          from './pages/SetupPage';
+import NotFoundPage       from './pages/NotFoundPage';
 
-/* Role Dashboards */
-import DashboardPage          from './pages/DashboardPage';
-import TeacherDashboardPage   from './pages/TeacherDashboardPage';
-import StudentDashboardPage   from './pages/StudentDashboardPage';
-import ParentDashboardPage    from './pages/ParentDashboardPage';
-
-/* Admin pages */
-import StudentsPage       from './pages/StudentsPage';
-import TeachersPage       from './pages/TeachersPage';
-import TeacherDetailPage  from './pages/TeacherDetailPage';
-import ClassesPage        from './pages/ClassesPage';
-import AdmissionPage      from './pages/AdmissionPage';
-import ClassDetailPage    from './pages/ClassDetailPage';
-import TimetablePage      from './pages/TimetablePage';
-import TimetablePrintPage from './pages/TimetablePrintPage';
-import AttendancePage     from './pages/AttendancePage';
-import FeesPage           from './pages/FeesPage';
-import SubjectsPage       from './pages/SubjectsPage';
-import ExamsPage          from './pages/ExamsPage';
-import ReportCardPrintPage   from './pages/ReportCardPrintPage';
-import PaperPrintPage        from './pages/PaperPrintPage';
-import ExamDateSheetPrint    from './pages/ExamDateSheetPrint';
-import StudentIdCardPage    from './pages/StudentIdCardPage';
-import TeacherIdCardPage    from './pages/TeacherIdCardPage';
-import CertificatePrintPage from './pages/CertificatePrintPage';
-import AnnouncementsPage  from './pages/AnnouncementsPage';
-import ExpensesPage       from './pages/ExpensesPage';
-import TransportPage      from './pages/TransportPage';
-import LibraryPage        from './pages/LibraryPage';
-import FeeInvoicePrint   from './pages/FeeInvoicePrint';
-import FeeReceiptPrint   from './pages/FeeReceiptPrint';
-import FeeBulkPrintPage          from './pages/FeeBulkPrintPage';
-import FeeDefaultersPrintPage    from './pages/FeeDefaultersPrintPage';
-import SalaryPage                from './pages/SalaryPage';
-import SalarySlipPrintPage       from './pages/SalarySlipPrintPage';
-import HomeworkPage              from './pages/HomeworkPage';
-import EventsPage                from './pages/EventsPage';
-import InventoryPage             from './pages/InventoryPage';
-import SettingsPage              from './pages/SettingsPage';
-import StudentPerformancePage    from './pages/StudentPerformancePage';
-import StudentDetailPrintPage   from './pages/StudentDetailPrintPage';
-import NotFoundPage              from './pages/NotFoundPage';
-import MessagingPage             from './pages/MessagingPage';
-import DiaryPage                from './pages/DiaryPage';
-import FeeChallanPrint          from './pages/FeeChallanPrint';
-import SiblingVoucherPrintPage  from './pages/SiblingVoucherPrintPage';
-import AttendancePrintPage      from './pages/AttendancePrintPage';
-import BoardExamsPage           from './pages/BoardExamsPage';
-import IncomePage               from './pages/IncomePage';
-import LeavePage                from './pages/LeavePage';
-import SetupPage                from './pages/SetupPage';
-import FeeStructurePrintPage    from './pages/FeeStructurePrintPage';
-import StudentFeePage           from './pages/StudentFeePage';
-import FeeMonthlySlipPage       from './pages/FeeMonthlySlipPage';
-import TeacherDetailPrintPage   from './pages/TeacherDetailPrintPage';
-import SyllabusPage             from './pages/SyllabusPage';
-import FinancialAnalyticsPage   from './pages/FinancialAnalyticsPage';
-import AnnualReportPage         from './pages/AnnualReportPage';
-import CustomReportPage         from './pages/CustomReportPage';
-import LateArrivalsPage         from './pages/LateArrivalsPage';
-import MedicalRecordsPage       from './pages/MedicalRecordsPage';
-import CanteenPage              from './pages/CanteenPage';
-import MeetingsPage             from './pages/MeetingsPage';
-import MeetingsPrintPage        from './pages/MeetingsPrintPage';
-import ScholarshipsPage         from './pages/ScholarshipsPage';
-import AlumniPage               from './pages/AlumniPage';
-import RolloverWizardPage       from './pages/RolloverWizardPage';
-import QuizzesPage              from './pages/QuizzesPage';
-import QuizTakePage             from './pages/QuizTakePage';
-import QuizResultsPage          from './pages/QuizResultsPage';
-import OnlineClassesPage        from './pages/OnlineClassesPage';
-import AcademicCalendarPage     from './pages/AcademicCalendarPage';
+/* All other pages — lazy loaded, each gets its own JS chunk */
+const DashboardPage          = lazy(() => import('./pages/DashboardPage'));
+const TeacherDashboardPage   = lazy(() => import('./pages/TeacherDashboardPage'));
+const StudentDashboardPage   = lazy(() => import('./pages/StudentDashboardPage'));
+const ParentDashboardPage    = lazy(() => import('./pages/ParentDashboardPage'));
+const StudentsPage           = lazy(() => import('./pages/StudentsPage'));
+const TeachersPage           = lazy(() => import('./pages/TeachersPage'));
+const TeacherDetailPage      = lazy(() => import('./pages/TeacherDetailPage'));
+const ClassesPage            = lazy(() => import('./pages/ClassesPage'));
+const AdmissionPage          = lazy(() => import('./pages/AdmissionPage'));
+const ClassDetailPage        = lazy(() => import('./pages/ClassDetailPage'));
+const TimetablePage          = lazy(() => import('./pages/TimetablePage'));
+const TimetablePrintPage     = lazy(() => import('./pages/TimetablePrintPage'));
+const AttendancePage         = lazy(() => import('./pages/AttendancePage'));
+const FeesPage               = lazy(() => import('./pages/FeesPage'));
+const SubjectsPage           = lazy(() => import('./pages/SubjectsPage'));
+const ExamsPage              = lazy(() => import('./pages/ExamsPage'));
+const ReportCardPrintPage    = lazy(() => import('./pages/ReportCardPrintPage'));
+const PaperPrintPage         = lazy(() => import('./pages/PaperPrintPage'));
+const ExamDateSheetPrint     = lazy(() => import('./pages/ExamDateSheetPrint'));
+const StudentIdCardPage      = lazy(() => import('./pages/StudentIdCardPage'));
+const TeacherIdCardPage      = lazy(() => import('./pages/TeacherIdCardPage'));
+const CertificatePrintPage   = lazy(() => import('./pages/CertificatePrintPage'));
+const AnnouncementsPage      = lazy(() => import('./pages/AnnouncementsPage'));
+const ExpensesPage           = lazy(() => import('./pages/ExpensesPage'));
+const TransportPage          = lazy(() => import('./pages/TransportPage'));
+const LibraryPage            = lazy(() => import('./pages/LibraryPage'));
+const FeeInvoicePrint        = lazy(() => import('./pages/FeeInvoicePrint'));
+const FeeReceiptPrint        = lazy(() => import('./pages/FeeReceiptPrint'));
+const FeeBulkPrintPage       = lazy(() => import('./pages/FeeBulkPrintPage'));
+const FeeDefaultersPrintPage = lazy(() => import('./pages/FeeDefaultersPrintPage'));
+const SalaryPage             = lazy(() => import('./pages/SalaryPage'));
+const SalarySlipPrintPage    = lazy(() => import('./pages/SalarySlipPrintPage'));
+const HomeworkPage           = lazy(() => import('./pages/HomeworkPage'));
+const EventsPage             = lazy(() => import('./pages/EventsPage'));
+const InventoryPage          = lazy(() => import('./pages/InventoryPage'));
+const SettingsPage           = lazy(() => import('./pages/SettingsPage'));
+const StudentPerformancePage = lazy(() => import('./pages/StudentPerformancePage'));
+const StudentDetailPrintPage = lazy(() => import('./pages/StudentDetailPrintPage'));
+const MessagingPage          = lazy(() => import('./pages/MessagingPage'));
+const DiaryPage              = lazy(() => import('./pages/DiaryPage'));
+const FeeChallanPrint        = lazy(() => import('./pages/FeeChallanPrint'));
+const SiblingVoucherPrintPage= lazy(() => import('./pages/SiblingVoucherPrintPage'));
+const AttendancePrintPage    = lazy(() => import('./pages/AttendancePrintPage'));
+const BoardExamsPage         = lazy(() => import('./pages/BoardExamsPage'));
+const IncomePage             = lazy(() => import('./pages/IncomePage'));
+const LeavePage              = lazy(() => import('./pages/LeavePage'));
+const FeeStructurePrintPage  = lazy(() => import('./pages/FeeStructurePrintPage'));
+const StudentFeePage         = lazy(() => import('./pages/StudentFeePage'));
+const FeeMonthlySlipPage     = lazy(() => import('./pages/FeeMonthlySlipPage'));
+const TeacherDetailPrintPage = lazy(() => import('./pages/TeacherDetailPrintPage'));
+const SyllabusPage           = lazy(() => import('./pages/SyllabusPage'));
+const FinancialAnalyticsPage = lazy(() => import('./pages/FinancialAnalyticsPage'));
+const AnnualReportPage       = lazy(() => import('./pages/AnnualReportPage'));
+const CustomReportPage       = lazy(() => import('./pages/CustomReportPage'));
+const LateArrivalsPage       = lazy(() => import('./pages/LateArrivalsPage'));
+const MedicalRecordsPage     = lazy(() => import('./pages/MedicalRecordsPage'));
+const CanteenPage            = lazy(() => import('./pages/CanteenPage'));
+const MeetingsPage           = lazy(() => import('./pages/MeetingsPage'));
+const MeetingsPrintPage      = lazy(() => import('./pages/MeetingsPrintPage'));
+const ScholarshipsPage       = lazy(() => import('./pages/ScholarshipsPage'));
+const AlumniPage             = lazy(() => import('./pages/AlumniPage'));
+const RolloverWizardPage     = lazy(() => import('./pages/RolloverWizardPage'));
+const QuizzesPage            = lazy(() => import('./pages/QuizzesPage'));
+const QuizTakePage           = lazy(() => import('./pages/QuizTakePage'));
+const QuizResultsPage        = lazy(() => import('./pages/QuizResultsPage'));
+const OnlineClassesPage      = lazy(() => import('./pages/OnlineClassesPage'));
+const AcademicCalendarPage   = lazy(() => import('./pages/AcademicCalendarPage'));
+const StaffPage              = lazy(() => import('./pages/StaffPage'));
 /* Redirect / → role-appropriate home */
 function RoleRedirect() {
   const { user } = useAuth();
@@ -95,6 +96,7 @@ export default function App() {
     <ThemeProvider>
       <AuthProvider>
         <BrowserRouter>
+          <Suspense fallback={<PageLoader />}>
           <Routes>
             {/* Public */}
             <Route path="/login"           element={<LoginPage />} />
@@ -404,8 +406,11 @@ export default function App() {
               </ProtectedRoute>
             } />
 
+            <Route path="/staff" element={<ProtectedRoute roles={['admin']}><StaffPage /></ProtectedRoute>} />
+
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
+          </Suspense>
         </BrowserRouter>
 
         <Toaster

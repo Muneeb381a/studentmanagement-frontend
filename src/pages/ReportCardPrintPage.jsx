@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getStudentReportCard, getClassReportCards } from '../api/exams';
+import { getStudentReportCard, getClassReportCards, downloadStudentReportCardPDF, downloadClassReportCardsPDF } from '../api/exams';
 
 // ── Pakistani grading scale ────────────────────────────────
 const GRADE_SCALE = [
@@ -323,10 +323,11 @@ function ReportCard({ summary, subjects, settings }) {
 
 // ── Page wrapper ──────────────────────────────────────────
 export default function ReportCardPrintPage() {
-  const [params]  = useSearchParams();
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState('');
-  const [cards,   setCards]   = useState([]);
+  const [params]     = useSearchParams();
+  const [loading,    setLoading]    = useState(true);
+  const [error,      setError]      = useState('');
+  const [cards,      setCards]      = useState([]);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const type      = params.get('type')      || 'single';
   const examId    = params.get('exam_id');
@@ -370,10 +371,39 @@ export default function ReportCardPrintPage() {
     ? `${cards.length} Report Card${cards.length !== 1 ? 's' : ''} — ${cards[0]?.summary?.class_name || ''}`
     : cards[0]?.summary?.full_name || 'Report Card';
 
+  const handleDownloadPDF = async () => {
+    setPdfLoading(true);
+    try {
+      let res;
+      if (type === 'class') {
+        res = await downloadClassReportCardsPDF(examId, classId);
+      } else {
+        res = await downloadStudentReportCardPDF(examId, studentId);
+      }
+      const url  = URL.createObjectURL(res.data);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = type === 'class'
+        ? `report-cards-class-${classId}-exam-${examId}.pdf`
+        : `report-card_${(cards[0]?.summary?.full_name || 'student').replace(/\s+/g,'_')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      alert('PDF generation failed. Please try again.');
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
   return (
     <>
       <div className="no-print toolbar">
         <div className="toolbar-info"><strong>{infoLabel}</strong></div>
+        <button className="pdf-btn" onClick={handleDownloadPDF} disabled={pdfLoading}>
+          {pdfLoading ? '⏳ Generating…' : '⬇ Download PDF'}
+        </button>
         <button className="print-btn" onClick={() => window.print()}>🖨 Print</button>
         <button className="close-btn" onClick={() => window.close()}>✕ Close</button>
       </div>
@@ -399,6 +429,8 @@ export default function ReportCardPrintPage() {
           padding: 10px 20px; display: flex; align-items: center; gap: 12px;
         }
         .toolbar-info { flex: 1; font-size: 13px; }
+        .pdf-btn   { background: #0ea5e9; color: #fff; border: none; border-radius: 8px; padding: 7px 18px; font-size: 13px; font-weight: 600; cursor: pointer; }
+        .pdf-btn:disabled { opacity: 0.65; cursor: default; }
         .print-btn { background: #10b981; color: #fff; border: none; border-radius: 8px; padding: 7px 18px; font-size: 13px; font-weight: 600; cursor: pointer; }
         .close-btn { background: #475569; color: #fff; border: none; border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; }
 

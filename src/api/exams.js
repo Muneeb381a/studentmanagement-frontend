@@ -32,6 +32,13 @@ export const getClassReportCards      = (examId, classId)  => api.get(`/exams/${
 // ── Student Performance (longitudinal) ─────────────────────
 export const getStudentPerformance = (studentId) => api.get(`/exams/student/${studentId}/performance`);
 
+// ── PDF Downloads ───────────────────────────────────────────
+export const downloadStudentReportCardPDF = (examId, studentId) =>
+  api.get(`/exams/${examId}/results/student/${studentId}/pdf`, { responseType: 'blob', timeout: 30000 });
+
+export const downloadClassReportCardsPDF = (examId, classId) =>
+  api.get(`/exams/${examId}/results/class/${classId}/report-cards/pdf`, { responseType: 'blob', timeout: 60000 });
+
 // ── Date Sheet ──────────────────────────────────────────────
 export const getDateSheet    = (examId, params = {}) => api.get(`/exams/${examId}/date-sheet`, { params });
 export const updateDateSheet = (examId, data)        => api.patch(`/exams/${examId}/date-sheet`, data);

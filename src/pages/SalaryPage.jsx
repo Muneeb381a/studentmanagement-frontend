@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { DollarSign, Users, CheckCircle, Clock, Plus, Printer, Settings2, X } from 'lucide-react';
+import { DollarSign, Users, CheckCircle, Clock, Plus, Printer, Settings2, X, SlidersHorizontal } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Layout          from '../components/layout/Layout';
 import { INPUT_CLS, SELECT_CLS } from '../components/ui/Input';
@@ -9,6 +9,7 @@ import Badge from '../components/ui/Badge';
 import {
   getSalaryPayments, generateMonthlySalaries, markSalaryPaid,
   getSalaryStructures, upsertSalaryStructure, bulkMarkSalaryPaid,
+  getSalaryPolicy, updateSalaryPolicy,
 } from '../api/salary';
 import { getTeachers } from '../api/teachers';
 
@@ -204,6 +205,72 @@ function BulkPaidModal({ count, onClose, onConfirm }) {
   );
 }
 
+/* ── Policy Modal ── */
+function PolicyModal({ policy, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    allowed_leaves_per_month: policy?.allowed_leaves_per_month ?? 2,
+    late_arrivals_per_leave:  policy?.late_arrivals_per_leave  ?? 3,
+    working_days_basis:       policy?.working_days_basis       ?? 26,
+  });
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const inp = INPUT_CLS;
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateSalaryPolicy(form);
+      toast.success('Salary policy updated');
+      onSaved();
+      onClose();
+    } catch (e) {
+      toast.error(e?.response?.data?.message || 'Save failed');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200/80 dark:border-slate-800 p-6">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">Payroll Policy</h2>
+            <p className="text-xs text-slate-400 mt-0.5">Rules applied when generating monthly salaries</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><X size={16} /></button>
+        </div>
+
+        <div className="space-y-4 mb-5">
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Free Absent Days / Month</label>
+            <input type="number" min="0" max="30" value={form.allowed_leaves_per_month}
+              onChange={e => set('allowed_leaves_per_month', +e.target.value)} className={inp} />
+            <p className="text-[10px] text-slate-400 mt-1">Absent days below this threshold are not deducted.</p>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Late Arrivals Per Leave Day</label>
+            <input type="number" min="1" max="30" value={form.late_arrivals_per_leave}
+              onChange={e => set('late_arrivals_per_leave', +e.target.value)} className={inp} />
+            <p className="text-[10px] text-slate-400 mt-1">Every N late arrivals deduct 1 day salary. Set to 0 to disable.</p>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Working Days Basis</label>
+            <input type="number" min="1" max="31" value={form.working_days_basis}
+              onChange={e => set('working_days_basis', +e.target.value)} className={inp} />
+            <p className="text-[10px] text-slate-400 mt-1">Per-day rate = base salary ÷ this number.</p>
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Cancel</button>
+          <button onClick={handleSave} disabled={saving} className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold transition-colors">
+            {saving ? 'Saving…' : 'Save Policy'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SalaryPage() {
   const [tab,        setTab]        = useState(0);
   const [payments,   setPayments]   = useState([]);
@@ -217,6 +284,8 @@ export default function SalaryPage() {
   const [paidModal,    setPaidModal]    = useState(null); // payment
   const [selectedIds,  setSelectedIds]  = useState(new Set());
   const [bulkModal,    setBulkModal]    = useState(false);
+  const [policy,       setPolicy]       = useState(null);
+  const [policyModal,  setPolicyModal]  = useState(false);
 
   const fetchPayments = useCallback(async () => {
     setLoading(true);
@@ -235,8 +304,13 @@ export default function SalaryPage() {
     } catch { toast.error('Failed to load salary structures'); }
   }, []);
 
+  const fetchPolicy = useCallback(async () => {
+    try { const r = await getSalaryPolicy(); setPolicy(r.data || null); } catch { /* non-fatal */ }
+  }, []);
+
   useEffect(() => { fetchPayments(); }, [fetchPayments]);
   useEffect(() => { fetchStructures(); }, [fetchStructures]);
+  useEffect(() => { fetchPolicy(); }, [fetchPolicy]);
 
   const handleGenerate = async () => {
     setGenerating(true);
@@ -309,6 +383,10 @@ export default function SalaryPage() {
               <p className="text-white/60 text-sm mt-1">Manage teacher salaries and pay slips</p>
             </div>
             <div className="flex gap-2 flex-wrap self-start sm:self-auto">
+              <button onClick={() => setPolicyModal(true)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/20 hover:bg-white/30 border border-white/30 text-white text-sm font-semibold transition-all">
+                <SlidersHorizontal size={14} /> Policy
+              </button>
               <button onClick={handleGenerate} disabled={generating}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/20 hover:bg-white/30 border border-white/30 text-white text-sm font-semibold transition-all disabled:opacity-50">
                 <Plus size={14} /> {generating ? 'Generating…' : `Generate ${month}`}
@@ -372,7 +450,7 @@ export default function SalaryPage() {
                                 className="w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-600 text-emerald-600 cursor-pointer" />
                             )}
                           </th>
-                          {['Teacher', 'Designation', 'Gross', 'Deductions', 'Net Pay', 'Status', 'Actions'].map(h => (
+                          {['Teacher', 'Designation', 'Gross', 'Absent / Late', 'Deductions', 'Net Pay', 'Status', 'Actions'].map(h => (
                             <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-[0.08em] whitespace-nowrap">{h}</th>
                           ))}
                         </tr>
@@ -392,6 +470,15 @@ export default function SalaryPage() {
                             </td>
                             <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">{p.qualification || '—'}</td>
                             <td className="px-4 py-3 font-semibold whitespace-nowrap">Rs {fmt(p.gross_salary)}</td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <span className="text-slate-600 dark:text-slate-400 text-xs">
+                                {p.absent_days ?? 0}d
+                                {(p.late_days ?? 0) > 0 && <span className="text-amber-500 ml-1">/ {p.late_days}L</span>}
+                              </span>
+                              {(p.attendance_deduction > 0 || p.late_deduction > 0) && (
+                                <div className="text-[10px] text-red-400 mt-0.5">−Rs {fmt((+p.attendance_deduction || 0) + (+p.late_deduction || 0))}</div>
+                              )}
+                            </td>
                             <td className="px-4 py-3 text-red-500 whitespace-nowrap">Rs {fmt(p.total_deductions)}</td>
                             <td className="px-4 py-3 font-bold text-emerald-600 whitespace-nowrap">Rs {fmt(p.net_salary)}</td>
                             <td className="px-4 py-3 whitespace-nowrap">
@@ -510,6 +597,13 @@ export default function SalaryPage() {
           count={selectedIds.size}
           onClose={() => setBulkModal(false)}
           onConfirm={handleBulkPaid}
+        />
+      )}
+      {policyModal && (
+        <PolicyModal
+          policy={policy}
+          onClose={() => setPolicyModal(false)}
+          onSaved={fetchPolicy}
         />
       )}
     </Layout>

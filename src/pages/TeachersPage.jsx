@@ -16,6 +16,7 @@ import EmptyState from '../components/ui/EmptyState';
 import TeacherFormModal from '../components/TeacherFormModal';
 import { getTeachers, createTeacher, updateTeacher, deleteTeacher, getTeacherImportTemplate, importTeachers, exportTeachers } from '../api/teachers';
 import { toPct, formatDate, downloadBlob } from '../utils';
+import Pagination from '../components/ui/Pagination';
 import { TEACHER_STATUS_STYLES } from '../constants';
 import { SELECT_CLS } from '../components/ui/Input';
 
@@ -216,6 +217,8 @@ function TeacherCard({ teacher, onEdit, onDelete, onView }) {
 export default function TeachersPage() {
   const navigate = useNavigate();
   const [teachers,     setTeachers]     = useState([]);
+  const [meta,         setMeta]         = useState(null);
+  const [page,         setPage]         = useState(1);
   const [loading,      setLoading]      = useState(true);
   const [search,       setSearch]       = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -223,16 +226,21 @@ export default function TeachersPage() {
   const [editTarget,   setEditTarget]   = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [showImport,   setShowImport]   = useState(false);
-  const [newCredentials, setNewCredentials] = useState(null); // { teacher, credentials }
+  const [newCredentials, setNewCredentials] = useState(null);
+
+  // Reset page when filters change
+  useEffect(() => { setPage(1); }, [search, statusFilter]);
 
   const fetchTeachers = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await getTeachers({ search, status: statusFilter });
-      setTeachers(Array.isArray(res.data) ? res.data : []);
+      const res = await getTeachers({ search, status: statusFilter, page, limit: 50 });
+      const body = res.data;
+      setTeachers(Array.isArray(body) ? body : (body?.data ?? []));
+      setMeta(body?.meta ?? null);
     } catch { toast.error('Failed to load teachers'); }
     finally { setLoading(false); }
-  }, [search, statusFilter]);
+  }, [search, statusFilter, page]);
 
   useEffect(() => { fetchTeachers(); }, [fetchTeachers]);
 
@@ -395,6 +403,9 @@ export default function TeachersPage() {
               ))}
             </div>
           )}
+          <div className="px-4 border-t border-slate-100 dark:border-slate-800">
+            <Pagination meta={meta} onChange={setPage} />
+          </div>
         </div>
       </div>
 

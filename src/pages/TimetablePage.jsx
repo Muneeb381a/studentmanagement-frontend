@@ -306,6 +306,8 @@ export default function TimetablePage() {
 
   const [periodModal,   setPeriodModal]   = useState(null);  // null | {} | period obj
   const [slotModal,     setSlotModal]     = useState(null);  // null | { periodId, dayNum, ... }
+  const [dragSource,    setDragSource]    = useState(null);  // { periodId, dayNum, entry }
+  const [dragOver,      setDragOver]      = useState(null);  // 'periodId_dayNum' key
 
   const [printTeacher,  setPrintTeacher]  = useState('');    // "id|name" or ''
 
@@ -345,6 +347,43 @@ export default function TimetablePage() {
     const res = await getPeriods();
     setPeriods(Array.isArray(res.data) ? res.data : []);
   };
+
+  // ── Drag-and-drop: move or swap timetable slots ───────────
+  const handleDrop = useCallback(async (targetPeriodId, targetDayNum) => {
+    if (!dragSource) return;
+    const { periodId: srcPeriodId, dayNum: srcDayNum, entry: srcEntry } = dragSource;
+    setDragSource(null);
+    setDragOver(null);
+    if (srcPeriodId === targetPeriodId && srcDayNum === targetDayNum) return;
+
+    const targetEntry = entryMap[`${targetPeriodId}_${targetDayNum}`];
+    try {
+      // Place source entry at target cell
+      await upsertEntry({
+        class_id: selectedClass, period_id: targetPeriodId, day_of_week: targetDayNum,
+        teacher_id: srcEntry.teacher_id || null, subject: srcEntry.subject,
+        room: srcEntry.room || null, academic_year: academicYear,
+      });
+
+      if (targetEntry?.subject) {
+        // Swap — put target entry at source cell
+        await upsertEntry({
+          class_id: selectedClass, period_id: srcPeriodId, day_of_week: srcDayNum,
+          teacher_id: targetEntry.teacher_id || null, subject: targetEntry.subject,
+          room: targetEntry.room || null, academic_year: academicYear,
+        });
+      } else {
+        // Move only — clear source cell
+        if (srcEntry.id) await deleteEntry(srcEntry.id);
+      }
+
+      toast.success(targetEntry?.subject ? 'Slots swapped' : 'Slot moved');
+      loadTimetable();
+    } catch {
+      toast.error('Failed to move slot');
+      loadTimetable();
+    }
+  }, [dragSource, entryMap, selectedClass, academicYear, loadTimetable]);
 
   // Build entry lookup: { periodId_dayNum: entry }
   const entryMap = {};
@@ -620,6 +659,8 @@ export default function TimetablePage() {
                             const entry      = entryMap[key];
                             const conflict   = conflictMap[key];
                             const color      = subjectColor(entry?.subject);
+                            const isOver     = dragOver === key;
+                            const isSrc      = dragSource?.periodId === p.id && dragSource?.dayNum === d.num;
 
                             if (p.is_break) {
                               return (
@@ -630,15 +671,33 @@ export default function TimetablePage() {
                             }
 
                             return (
-                              <td key={d.num} className="px-2 py-2 border-b border-slate-100 dark:border-slate-800">
+                              <td
+                                key={d.num}
+                                className={[
+                                  'px-2 py-2 border-b border-slate-100 dark:border-slate-800 transition-colors duration-100',
+                                  isOver ? 'bg-indigo-50 dark:bg-indigo-900/20' : '',
+                                ].join(' ')}
+                                onDragOver={e => { e.preventDefault(); if (dragSource) setDragOver(key); }}
+                                onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOver(null); }}
+                                onDrop={() => handleDrop(p.id, d.num)}
+                              >
                                 <button
+                                  draggable={!!entry?.subject}
+                                  onDragStart={() => entry?.subject && setDragSource({ periodId: p.id, dayNum: d.num, entry })}
+                                  onDragEnd={() => { setDragSource(null); setDragOver(null); }}
                                   onClick={() => setSlotModal({ entry, periodId: p.id, dayNum: d.num, dayLabel: d.label, periodName: p.name, conflict })}
-                                  className="w-full min-h-[56px] rounded-xl transition-all hover:scale-[1.02] hover:shadow-md text-left p-2 border relative"
+                                  className={[
+                                    'w-full min-h-14 rounded-xl transition-all text-left p-2 border relative',
+                                    isSrc ? 'opacity-40 scale-95' : 'hover:scale-[1.02] hover:shadow-md',
+                                    entry?.subject ? 'cursor-grab active:cursor-grabbing' : '',
+                                  ].join(' ')}
                                   style={conflict
                                     ? { background: '#fff1f2', borderColor: '#fca5a5', borderWidth: '2px' }
-                                    : color
-                                      ? { background: color.bg, borderColor: color.border }
-                                      : { background: 'transparent', borderColor: 'transparent' }
+                                    : isOver && dragSource
+                                      ? { background: '#eef2ff', borderColor: '#818cf8', borderWidth: '2px', borderStyle: 'dashed' }
+                                      : color
+                                        ? { background: color.bg, borderColor: color.border }
+                                        : { background: 'transparent', borderColor: 'transparent' }
                                   }
                                 >
                                   {conflict && (
@@ -664,7 +723,10 @@ export default function TimetablePage() {
                                     </div>
                                   ) : (
                                     <div className="w-full h-full flex items-center justify-center group">
-                                      <Plus size={14} className="text-slate-300 dark:text-slate-600 group-hover:text-indigo-400 transition-colors" />
+                                      <Plus size={14} className={[
+                                        'transition-colors',
+                                        isOver && dragSource ? 'text-indigo-400' : 'text-slate-300 dark:text-slate-600 group-hover:text-indigo-400',
+                                      ].join(' ')} />
                                     </div>
                                   )}
                                 </button>

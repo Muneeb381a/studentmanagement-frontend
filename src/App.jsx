@@ -81,6 +81,7 @@ const QuizResultsPage        = lazy(() => import('./pages/QuizResultsPage'));
 const OnlineClassesPage      = lazy(() => import('./pages/OnlineClassesPage'));
 const AcademicCalendarPage   = lazy(() => import('./pages/AcademicCalendarPage'));
 const StaffPage              = lazy(() => import('./pages/StaffPage'));
+const AutomationPage         = lazy(() => import('./pages/AutomationPage'));
 /* Redirect / → role-appropriate home */
 function RoleRedirect() {
   const { user } = useAuth();
@@ -407,6 +408,7 @@ export default function App() {
             } />
 
             <Route path="/staff" element={<ProtectedRoute roles={['admin']}><StaffPage /></ProtectedRoute>} />
+            <Route path="/automation" element={<ProtectedRoute roles={['admin']}><AutomationPage /></ProtectedRoute>} />
 
             <Route path="*" element={<NotFoundPage />} />
           </Routes>

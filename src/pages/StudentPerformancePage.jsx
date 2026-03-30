@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, TrendingUp, Award, BookOpen, BarChart2,
-  CheckCircle2, XCircle, AlertCircle, Star,
+  CheckCircle2, XCircle, AlertCircle, Star, Zap,
 } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { PageLoader } from '../components/ui/Spinner';
@@ -10,13 +10,16 @@ import { getStudentPerformance } from '../api/exams';
 
 // ── Grade config ──────────────────────────────────────────────
 const GRADE_COLOR = { 'A1': '#10b981', A: '#34d399', B: '#6366f1', C: '#f59e0b', D: '#f97316', F: '#ef4444' };
-const GRADE_BG    = { 'A1': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
-                       A:   'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
-                       B:   'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300',
-                       C:   'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-                       D:   'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300',
-                       F:   'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300' };
-const TYPE_LABEL  = { midterm: 'Midterm', final: 'Final', quiz: 'Quiz', monthly_test: 'Monthly', other: 'Other' };
+const GRADE_BG    = {
+  'A1': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
+   A:   'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
+   B:   'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300',
+   C:   'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+   D:   'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300',
+   F:   'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+};
+const TYPE_LABEL = { midterm: 'Midterm', final: 'Final', quiz: 'Quiz', monthly_test: 'Monthly', other: 'Other' };
+const PALETTE    = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4'];
 
 function gradeColor(g) { return GRADE_COLOR[g] || '#94a3b8'; }
 function gradeBg(g)    { return GRADE_BG[g]    || 'bg-slate-100 text-slate-600'; }
@@ -65,6 +68,147 @@ function StatPill({ label, value, sub, color }) {
   );
 }
 
+// ── SVG Progress Chart ────────────────────────────────────────
+function SubjectProgressChart({ results, subjects }) {
+  const sorted = [...results].sort((a, b) => new Date(a.start_date || 0) - new Date(b.start_date || 0));
+  const n = sorted.length;
+  if (n === 0 || subjects.length === 0) return null;
+
+  const W = 600, H = 220, padL = 34, padR = 56, padT = 18, padB = 34;
+  const cW = W - padL - padR;
+  const cH = H - padT - padB;
+  const toX  = i   => padL + (n === 1 ? cW / 2 : (i / (n - 1)) * cW);
+  const toY  = pct => padT + (1 - Math.min(Math.max(pct, 0), 100) / 100) * cH;
+
+  const lines = subjects.slice(0, 6).map((sub, idx) => {
+    const pts = sorted.map((exam, i) => {
+      const m = sub.exams.find(e => e.exam_id === exam.exam_id);
+      if (!m || m.is_absent) return null;
+      return { x: toX(i), y: toY(m.subject_percentage), pct: m.subject_percentage, label: exam.exam_name };
+    });
+    const valid = pts.filter(Boolean);
+    if (valid.length === 0) return null;
+    const d    = valid.map((p, j) => `${j === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+    const area = `${d} L${valid[valid.length - 1].x.toFixed(1)},${toY(0)} L${valid[0].x.toFixed(1)},${toY(0)} Z`;
+    return { name: sub.subject_name, pts: valid, d, area, color: PALETTE[idx % PALETTE.length] };
+  }).filter(Boolean);
+
+  if (lines.length === 0) return null;
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
+      <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+        <TrendingUp size={16} className="text-indigo-500" />
+        <h2 className="font-bold text-slate-800 dark:text-slate-100 text-sm">Progress Over Time</h2>
+        <span className="text-xs text-slate-400 ml-1">{n} exam{n !== 1 ? 's' : ''}</span>
+      </div>
+      <div className="p-4">
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minHeight: 130 }}>
+          {/* Horizontal grid */}
+          {[0, 25, 50, 75, 100].map(y => {
+            const cy = toY(y);
+            const isPass = y === 50;
+            return (
+              <g key={y}>
+                <line x1={padL} y1={cy} x2={W - padR} y2={cy}
+                  stroke={isPass ? '#f59e0b' : '#e2e8f0'}
+                  strokeWidth={isPass ? 1.5 : 0.8}
+                  strokeDasharray={isPass ? '5 4' : undefined}
+                />
+                <text x={padL - 5} y={cy + 4} fontSize="9" fill="#94a3b8" textAnchor="end">{y}</text>
+              </g>
+            );
+          })}
+          {/* "Pass" label on the right */}
+          <text x={W - padR + 4} y={toY(50) + 4} fontSize="8" fill="#f59e0b" fontWeight="600">Pass</text>
+
+          {/* X axis exam labels */}
+          {sorted.map((exam, i) => (
+            <text key={exam.exam_id} x={toX(i)} y={H - padB + 13} fontSize="8" fill="#94a3b8" textAnchor="middle">
+              {exam.exam_name.length > 9 ? exam.exam_name.slice(0, 8) + '…' : exam.exam_name}
+            </text>
+          ))}
+
+          {/* Per-subject line + area + dots */}
+          {lines.map(({ name, pts, d, area, color }) => (
+            <g key={name}>
+              <path d={area} fill={color} fillOpacity="0.07" />
+              <path d={d} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              {pts.map((p, j) => (
+                <circle key={j} cx={p.x} cy={p.y} r="4" fill={color} stroke="white" strokeWidth="2">
+                  <title>{name}: {p.pct.toFixed(0)}% — {p.label}</title>
+                </circle>
+              ))}
+              {/* End-of-line value label */}
+              <text x={pts[pts.length - 1].x + 7} y={pts[pts.length - 1].y + 4}
+                fontSize="9" fill={color} fontWeight="700">
+                {pts[pts.length - 1].pct.toFixed(0)}%
+              </text>
+            </g>
+          ))}
+        </svg>
+
+        {/* Legend */}
+        <div className="flex flex-wrap gap-x-5 gap-y-1.5 mt-2">
+          {lines.map(({ name, color }) => (
+            <div key={name} className="flex items-center gap-1.5">
+              <span className="w-4 h-1.5 rounded-full inline-block" style={{ background: color }} />
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">{name}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Momentum row ──────────────────────────────────────────────
+function MomentumRow({ results, subjects }) {
+  const sorted = [...results].sort((a, b) => new Date(a.start_date || 0) - new Date(b.start_date || 0));
+
+  const moments = subjects.map(sub => {
+    const nonAbsent = sub.exams.filter(e => !e.is_absent);
+    const orderedSub = sorted
+      .map(r => nonAbsent.find(e => e.exam_id === r.exam_id))
+      .filter(Boolean);
+    if (orderedSub.length < 2) return null;
+    const last = orderedSub[orderedSub.length - 1];
+    const prev = orderedSub[orderedSub.length - 2];
+    const delta = last.subject_percentage - prev.subject_percentage;
+    return { name: sub.subject_name, delta, current: last.subject_percentage };
+  }).filter(Boolean).sort((a, b) => b.delta - a.delta);
+
+  if (moments.length === 0) return null;
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Zap size={14} className="text-amber-500" />
+        <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Performance Momentum</h3>
+        <span className="text-xs text-slate-400 dark:text-slate-600">vs previous exam</span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {moments.map(m => (
+          <div key={m.name} className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold ${
+            m.delta > 0
+              ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400'
+              : m.delta < 0
+              ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400'
+              : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'
+          }`}>
+            <span className="text-base leading-none">{m.delta > 0 ? '↑' : m.delta < 0 ? '↓' : '─'}</span>
+            <span>{m.name}</span>
+            <span className="font-black tabular-nums">
+              {m.delta > 0 ? '+' : ''}{m.delta.toFixed(0)}%
+            </span>
+            <span className="opacity-60 font-normal">({m.current.toFixed(0)}% now)</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Subject card ─────────────────────────────────────────────
 function SubjectCard({ sub, examLabels }) {
   const marksByExam = {};
@@ -78,7 +222,6 @@ function SubjectCard({ sub, examLabels }) {
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 space-y-3">
-      {/* Subject name + avg */}
       <div className="flex items-center justify-between gap-2">
         <div>
           <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{sub.subject_name}</p>
@@ -102,7 +245,6 @@ function SubjectCard({ sub, examLabels }) {
         </div>
       </div>
 
-      {/* Per-exam mini bars */}
       <div className="space-y-1.5">
         {examLabels.map(e => {
           const m = marksByExam[e.id];
@@ -131,7 +273,7 @@ export default function StudentPerformancePage() {
   const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
-  const [showAll, setShowAll] = useState(false);   // toggle full exam history
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -170,7 +312,6 @@ export default function StudentPerformancePage() {
       }).filter(Boolean)
     : [];
 
-  // Strong (avg ≥ passing) vs needs-attention subjects
   const subjectAvgs = subjects.map(sub => {
     const appeared = sub.exams.filter(e => !e.is_absent);
     const pcts     = appeared.map(e => e.subject_percentage).filter(p => !isNaN(p));
@@ -178,18 +319,18 @@ export default function StudentPerformancePage() {
     const passing  = appeared[0] ? Math.round(appeared[0].passing_marks / appeared[0].total_marks * 100) : 50;
     return { name: sub.subject_name, avg, passing };
   }).filter(s => s.avg !== null);
-  const strong    = subjectAvgs.filter(s => s.avg >= s.passing).sort((a, b) => b.avg - a.avg);
-  const weak      = subjectAvgs.filter(s => s.avg < s.passing).sort((a, b) => a.avg - b.avg);
+  const strong = subjectAvgs.filter(s => s.avg >= s.passing).sort((a, b) => b.avg - a.avg);
+  const weak   = subjectAvgs.filter(s => s.avg < s.passing).sort((a, b) => a.avg - b.avg);
 
-  const cardCls  = 'bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm';
-  const thCls    = 'px-4 py-2.5 text-left text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-[0.08em] whitespace-nowrap';
-  const tdCls    = 'px-4 py-3 text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap';
+  const cardCls      = 'bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm';
+  const thCls        = 'px-4 py-2.5 text-left text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-[0.08em] whitespace-nowrap';
+  const tdCls        = 'px-4 py-3 text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap';
   const visibleResults = showAll ? results : results.slice(-5);
 
   return (
     <Layout>
       {/* ── Hero header ── */}
-      <div className="bg-linear-to-br from-indigo-600 via-indigo-700 to-purple-700 px-4 sm:px-6 lg:px-8 pt-8 pb-20">
+      <div className="bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-700 px-4 sm:px-6 lg:px-8 pt-8 pb-20">
         <div className="max-w-6xl mx-auto">
           <button
             onClick={() => navigate('/students')}
@@ -238,7 +379,7 @@ export default function StudentPerformancePage() {
           />
         </div>
 
-        {/* ── No data state ── */}
+        {/* ── No data ── */}
         {totalExams === 0 && (
           <div className={`${cardCls} flex flex-col items-center justify-center py-20 gap-3`}>
             <BarChart2 size={40} className="text-slate-300 dark:text-slate-700" />
@@ -249,7 +390,15 @@ export default function StudentPerformancePage() {
 
         {totalExams > 0 && (
           <>
-            {/* ── Strong / Needs-attention pills ── */}
+            {/* ── Progress chart (new) ── */}
+            {results.length >= 2 && (
+              <SubjectProgressChart results={results} subjects={subjects} />
+            )}
+
+            {/* ── Momentum row (new) ── */}
+            <MomentumRow results={results} subjects={subjects} />
+
+            {/* ── Strong / Needs-attention ── */}
             {(strong.length > 0 || weak.length > 0) && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {strong.length > 0 && (
@@ -303,7 +452,7 @@ export default function StudentPerformancePage() {
                 </div>
                 <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {latestSubjects.map(s => {
-                    const pct = parseFloat(s.subject_percentage);
+                    const pct     = parseFloat(s.subject_percentage);
                     const passing = Math.round(s.passing_marks / s.total_marks * 100);
                     return (
                       <div key={s.subject_name} className={[
@@ -382,7 +531,7 @@ export default function StudentPerformancePage() {
                           <PctBar pct={parseFloat(r.percentage)} />
                         </td>
                         <td className={tdCls}>
-                          <span className={`inline-flex items-center justify-center w-9 h-9 rounded-xl text-xs font-black text-white`}
+                          <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl text-xs font-black text-white"
                             style={{ background: gradeColor(r.grade) }}>
                             {r.grade}
                           </span>

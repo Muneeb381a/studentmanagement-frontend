@@ -33,6 +33,7 @@ import {
   FileCheck,
   Video,
   HardHat,
+  Zap,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -189,6 +190,14 @@ export const NAV_LINKS = [
       { label: 'Annual Report', to: '/analytics/annual-report',  icon: FileText,      description: 'Year summary' },
       { label: 'Custom Report', to: '/analytics/custom-report',  icon: ClipboardList, description: 'Custom exports' },
     ],
+  },
+
+  // ── Automation ────────────────────────────────────────────────────────────
+  {
+    label: 'Automation',
+    to: '/automation',
+    icon: Zap,
+    description: 'Smart workflows & AI insights',
   },
 
   // ── Settings (flat) ───────────────────────────────────────────────────────

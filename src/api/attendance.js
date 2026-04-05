@@ -30,3 +30,7 @@ export const getStudentHistory = (studentId, month) =>
 // Printable monthly register
 export const getAttendanceRegister = (classId, month) =>
   api.get('/attendance/register', { params: { class_id: classId, month } });
+
+// One-tap attendance: teacher's classes for today with pre-populated student list
+export const getTeacherQuickList = (teacherId, date) =>
+  api.get('/attendance/teacher-quick-list', { params: { teacher_id: teacherId, date } });

@@ -82,6 +82,19 @@ const OnlineClassesPage      = lazy(() => import('./pages/OnlineClassesPage'));
 const AcademicCalendarPage   = lazy(() => import('./pages/AcademicCalendarPage'));
 const StaffPage              = lazy(() => import('./pages/StaffPage'));
 const AutomationPage         = lazy(() => import('./pages/AutomationPage'));
+const QuickAttendancePage    = lazy(() => import('./pages/QuickAttendancePage'));
+const GradebookPage          = lazy(() => import('./pages/GradebookPage'));
+const ParentMessagingPage    = lazy(() => import('./pages/ParentMessagingPage'));
+const ParentFeeLedgerPage    = lazy(() => import('./pages/ParentFeeLedgerPage'));
+const SuperAdminPage         = lazy(() => import('./pages/SuperAdminPage'));
+const OnboardingPage         = lazy(() => import('./pages/OnboardingPage'));
+const AtRiskPage             = lazy(() => import('./pages/AtRiskPage'));
+const WhatsAppPage           = lazy(() => import('./pages/WhatsAppPage'));
+const TimetableGeneratorPage = lazy(() => import('./pages/TimetableGeneratorPage'));
+const AuditLogsPage          = lazy(() => import('./pages/AuditLogsPage'));
+const SystemHealthPage       = lazy(() => import('./pages/SystemHealthPage'));
+const BillingPage            = lazy(() => import('./pages/BillingPage'));
+const DocumentsPage          = lazy(() => import('./pages/DocumentsPage'));
 /* Redirect / → role-appropriate home */
 function RoleRedirect() {
   const { user } = useAuth();
@@ -103,6 +116,11 @@ export default function App() {
             <Route path="/login"           element={<LoginPage />} />
             <Route path="/change-password" element={<ChangePasswordPage />} />
             <Route path="/setup"           element={<SetupPage />} />
+            <Route path="/onboarding"      element={
+              <ProtectedRoute roles={['admin']}>
+                <OnboardingPage />
+              </ProtectedRoute>
+            } />
 
             {/* Root → smart redirect */}
             <Route path="/" element={
@@ -409,6 +427,18 @@ export default function App() {
 
             <Route path="/staff" element={<ProtectedRoute roles={['admin']}><StaffPage /></ProtectedRoute>} />
             <Route path="/automation" element={<ProtectedRoute roles={['admin']}><AutomationPage /></ProtectedRoute>} />
+            <Route path="/quick-attendance" element={<ProtectedRoute roles={['admin','teacher']}><QuickAttendancePage /></ProtectedRoute>} />
+            <Route path="/gradebook" element={<ProtectedRoute roles={['admin','teacher']}><GradebookPage /></ProtectedRoute>} />
+            <Route path="/parent-messages" element={<ProtectedRoute roles={['parent','admin','teacher']}><ParentMessagingPage /></ProtectedRoute>} />
+            <Route path="/parent-fee-ledger" element={<ProtectedRoute roles={['parent','admin']}><ParentFeeLedgerPage /></ProtectedRoute>} />
+            <Route path="/super-admin" element={<ProtectedRoute roles={['admin']}><SuperAdminPage /></ProtectedRoute>} />
+            <Route path="/risk"                 element={<ProtectedRoute roles={['admin','teacher']}><AtRiskPage /></ProtectedRoute>} />
+            <Route path="/whatsapp"             element={<ProtectedRoute roles={['admin','teacher']}><WhatsAppPage /></ProtectedRoute>} />
+            <Route path="/timetable-generator"  element={<ProtectedRoute roles={['admin']}><TimetableGeneratorPage /></ProtectedRoute>} />
+            <Route path="/audit-logs"           element={<ProtectedRoute roles={['admin']}><AuditLogsPage /></ProtectedRoute>} />
+            <Route path="/system-health"        element={<ProtectedRoute roles={['admin']}><SystemHealthPage /></ProtectedRoute>} />
+            <Route path="/billing"              element={<ProtectedRoute roles={['admin']}><BillingPage /></ProtectedRoute>} />
+            <Route path="/documents"            element={<ProtectedRoute roles={['admin','teacher']}><DocumentsPage /></ProtectedRoute>} />
 
             <Route path="*" element={<NotFoundPage />} />
           </Routes>

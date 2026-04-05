@@ -14,9 +14,10 @@ const MEETING_TABS = [
   { id: 'bookings', label: 'Bookings' },
 ];
 import { getTeachers } from '../api/teachers';
+import { getStudents } from '../api/students';
 import {
   createSlots, getSlots, deleteSlot,
-  getBookings, cancelBooking,
+  bookSlot, getBookings, cancelBooking,
 } from '../api/meetings';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -43,9 +44,15 @@ export default function MeetingsPage() {
   // Create slots form
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [slotForm, setSlotForm] = useState({
-    teacher_id: '', date: today(), start_time: '', end_time: '', duration_min: 15, location: '',
+    teacher_id: '', slot_date: today(), start_time: '', end_time: '', duration_min: 15, location: '',
   });
   const [creatingSlots, setCreatingSlots] = useState(false);
+
+  // Book slot modal
+  const [bookingSlot,  setBookingSlot]  = useState(null); // slot object to book
+  const [students,     setStudents]     = useState([]);
+  const [bookForm,     setBookForm]     = useState({ student_id: '', parent_name: '', parent_phone: '', notes: '' });
+  const [bookingSlotLoading, setBookingSlotLoading] = useState(false);
 
   // Bookings tab
   const [bookingsTeacher, setBookingsTeacher] = useState('');
@@ -55,11 +62,12 @@ export default function MeetingsPage() {
   const [loadingBookings, setLoadingBookings] = useState(false);
 
   const setSlotForm_ = (k, v) => setSlotForm(f => ({ ...f, [k]: v }));
+  const setBookForm_ = (k, v) => setBookForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => {
     getTeachers({ status: 'active', limit: 200 })
       .then(r => { const d = r.data?.data ?? r.data ?? []; setTeachers(Array.isArray(d) ? d : []); })
-      .catch(() => {});
+      .catch(() => toast.error('Failed to load teachers'));
   }, []);
 
   const loadSlots = useCallback(async () => {
@@ -96,7 +104,7 @@ export default function MeetingsPage() {
   const handleCreateSlots = async (e) => {
     e.preventDefault();
     if (!slotForm.teacher_id) return toast.error('Select a teacher');
-    if (!slotForm.date) return toast.error('Date required');
+    if (!slotForm.slot_date) return toast.error('Date required');
     if (!slotForm.start_time || !slotForm.end_time) return toast.error('Start and end time required');
     setCreatingSlots(true);
     try {
@@ -124,6 +132,32 @@ export default function MeetingsPage() {
     } catch { toast.error('Cancel failed'); }
   };
 
+  const openBookModal = async (slot) => {
+    setBookingSlot(slot);
+    setBookForm({ student_id: '', parent_name: '', parent_phone: '', notes: '' });
+    if (students.length === 0) {
+      try {
+        const r = await getStudents({ limit: 500 });
+        const d = r.data?.data ?? r.data ?? [];
+        setStudents(Array.isArray(d) ? d : []);
+      } catch { /* silent */ }
+    }
+  };
+
+  const handleBookSlot = async () => {
+    if (!bookForm.student_id) return toast.error('Select a student');
+    setBookingSlotLoading(true);
+    try {
+      await bookSlot(bookingSlot.id, bookForm);
+      toast.success('Slot booked successfully');
+      setBookingSlot(null);
+      loadSlots();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Booking failed');
+    }
+    setBookingSlotLoading(false);
+  };
+
   const handlePrint = () => {
     const params = new URLSearchParams();
     if (bookingsDate) params.set('date', bookingsDate);
@@ -133,6 +167,50 @@ export default function MeetingsPage() {
 
   return (
     <Layout>
+      {/* Book Slot Modal */}
+      {bookingSlot && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+              <h2 className="font-bold text-slate-800 dark:text-white text-sm">Book Slot — {bookingSlot.start_time} · {bookingSlot.teacher_name}</h2>
+              <button onClick={() => setBookingSlot(null)}><X className="w-4 h-4 text-slate-400 hover:text-slate-600" /></button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Student *</label>
+                <div className="relative">
+                  <select value={bookForm.student_id} onChange={e => setBookForm_('student_id', e.target.value)} className={`${inp} pr-8 appearance-none`}>
+                    <option value="">Select student…</option>
+                    {students.map(s => <option key={s.id} value={s.id}>{s.full_name} — {s.class_name || ''}</option>)}
+                  </select>
+                  <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Parent Name</label>
+                <input value={bookForm.parent_name} onChange={e => setBookForm_('parent_name', e.target.value)} placeholder="e.g. Mr. Ahmed Khan" className={inp} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Parent Phone</label>
+                <input value={bookForm.parent_phone} onChange={e => setBookForm_('parent_phone', e.target.value)} placeholder="03XX-XXXXXXX" className={inp} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Notes</label>
+                <input value={bookForm.notes} onChange={e => setBookForm_('notes', e.target.value)} placeholder="Optional notes…" className={inp} />
+              </div>
+            </div>
+            <div className="px-5 py-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3">
+              <button onClick={() => setBookingSlot(null)} className="px-4 py-2 rounded-xl text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+              <button onClick={handleBookSlot} disabled={bookingSlotLoading}
+                className="flex items-center gap-2 px-5 py-2 rounded-xl text-white text-sm font-semibold disabled:opacity-60"
+                style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+                <CheckCircle2 className="w-4 h-4" /> {bookingSlotLoading ? 'Booking…' : 'Book Slot'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 sm:p-6 lg:p-8">
         <div className="max-w-7xl mx-auto space-y-6">
 
@@ -196,7 +274,7 @@ export default function MeetingsPage() {
                       </div>
                       <div>
                         <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Date *</label>
-                        <input type="date" value={slotForm.date} onChange={e => setSlotForm_('date', e.target.value)} className={inp} />
+                        <input type="date" value={slotForm.slot_date} onChange={e => setSlotForm_('slot_date', e.target.value)} className={inp} />
                       </div>
                       <div>
                         <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Duration (min)</label>
@@ -261,10 +339,16 @@ export default function MeetingsPage() {
                             {slot.status || 'available'}
                           </span>
                           {slot.status === 'available' && (
-                            <button onClick={() => handleDeleteSlot(slot.id)}
-                              className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors">
-                              <Trash2 className="w-3 h-3" />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => openBookModal(slot)}
+                                className="p-1 rounded hover:bg-indigo-100 dark:hover:bg-indigo-900/30 text-indigo-500 transition-colors" title="Book slot">
+                                <User className="w-3 h-3" />
+                              </button>
+                              <button onClick={() => handleDeleteSlot(slot.id)}
+                                className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors" title="Delete slot">
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
                           )}
                         </div>
                         {slot.status === 'booked' && slot.student_name && (

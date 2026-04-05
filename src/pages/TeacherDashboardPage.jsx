@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   CalendarDays, NotebookPen, FileBarChart2, Clock,
   CheckCircle2, AlertCircle, Plus, X, CalendarRange,
   ClipboardList, Loader2, Video, ExternalLink,
+  Zap, BarChart2, Users,
 } from 'lucide-react';
 import Layout    from '../components/layout/Layout';
 import StatCard  from '../components/ui/StatCard';
@@ -14,6 +16,7 @@ import { getHomework } from '../api/homework';
 import { getExams } from '../api/exams';
 import { getLeaveBalance, getLeaves, getLeaveTypes, applyLeave } from '../api/leave';
 import { getOnlineClasses } from '../api/onlineClasses';
+import { getSubmissionStats } from '../api/homeworkSubmissions';
 import toast from 'react-hot-toast';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -172,6 +175,7 @@ export default function TeacherDashboardPage() {
   const [balance,      setBalance]      = useState([]);
   const [leaveTypes,   setLeaveTypes]   = useState([]);
   const [onlineClasses,setOnlineClasses]= useState([]);
+  const [hwStats,      setHwStats]      = useState({});  // keyed by homework id
   const [loading,      setLoading]      = useState(true);
   const [showApply,    setShowApply]    = useState(false);
 
@@ -208,6 +212,18 @@ export default function TeacherDashboardPage() {
       setOnlineClasses(Array.isArray(ocRes.data) ? ocRes.data.slice(0, 5) : []);
       await fetchLeaves();
       setLoading(false);
+
+      // Submission stats — non-blocking, load after render
+      if (user.entity_id) {
+        getSubmissionStats({ teacher_id: user.entity_id })
+          .then(sr => {
+            const arr = sr.data?.data ?? sr.data ?? [];
+            const map = {};
+            (Array.isArray(arr) ? arr : []).forEach(s => { map[s.id] = s; });
+            setHwStats(map);
+          })
+          .catch(() => {});
+      }
     };
     fetchAll();
   }, [user.entity_id]); // eslint-disable-line
@@ -254,6 +270,37 @@ export default function TeacherDashboardPage() {
 
       {/* Content */}
       <div className="relative z-10 px-4 sm:px-6 lg:px-8 -mt-12 pb-12 space-y-6">
+
+        {/* ── Quick-action banner ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Link to="/quick-attendance"
+            className="flex items-center gap-4 p-4 rounded-2xl text-white shadow-lg hover:shadow-xl transition-all group"
+            style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+            <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+              <Zap size={22} className="text-white" />
+            </div>
+            <div>
+              <p className="font-bold text-base leading-tight">Quick Attendance</p>
+              <p className="text-white/70 text-xs mt-0.5">One-tap · present by default</p>
+              {todayPeriods.length > 0 && (
+                <p className="text-white/80 text-[11px] font-semibold mt-1">
+                  {todayPeriods.length} period{todayPeriods.length !== 1 ? 's' : ''} today
+                </p>
+              )}
+            </div>
+          </Link>
+          <Link to="/gradebook"
+            className="flex items-center gap-4 p-4 rounded-2xl text-white shadow-lg hover:shadow-xl transition-all group"
+            style={{ background: 'linear-gradient(135deg, #0891b2, #2563eb)' }}>
+            <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+              <BarChart2 size={22} className="text-white" />
+            </div>
+            <div>
+              <p className="font-bold text-base leading-tight">Gradebook</p>
+              <p className="text-white/70 text-xs mt-0.5">Spreadsheet marks · Tab to navigate</p>
+            </div>
+          </Link>
+        </div>
 
         {/* Stats row */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -311,6 +358,12 @@ export default function TeacherDashboardPage() {
                         <p className="text-[11px] text-slate-400">
                           {hw.class_name || '—'} · Due: {hw.due_date || '—'}
                         </p>
+                        {hwStats[hw.id] && (
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1">
+                            <Users size={9} />
+                            {hwStats[hw.id].submitted_count}/{hwStats[hw.id].total_students} submitted
+                          </p>
+                        )}
                       </div>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                         hw.status === 'graded'

@@ -5,7 +5,7 @@ import {
   School, CalendarDays, Plus, CheckCircle2, Trash2, X,
   DatabaseBackup, Download, Upload, AlertTriangle, ShieldCheck,
   ImagePlus, Trash, Webhook, Copy, ChevronDown, ChevronUp,
-  FlaskConical, CheckCheck, XCircle, Clock,
+  FlaskConical, CheckCheck, XCircle, Clock, MessageCircle, Eye, EyeOff,
 } from 'lucide-react';
 import {
   getSettings, saveSettings,
@@ -14,12 +14,14 @@ import {
   getWebhooks, createWebhook, updateWebhook, deleteWebhook, testWebhook, getWebhookLogs,
 } from '../api/settings';
 import { downloadBackup, restoreBackup } from '../api/backup';
+import { sendWhatsApp } from '../api/whatsapp';
 
 const TABS = [
-  { id: 'school',   label: 'School Info',      icon: School },
-  { id: 'academic', label: 'Academic Years',   icon: CalendarDays },
-  { id: 'webhooks', label: 'Webhooks',         icon: Webhook },
-  { id: 'backup',   label: 'Backup & Restore', icon: DatabaseBackup },
+  { id: 'school',    label: 'School Info',      icon: School },
+  { id: 'academic',  label: 'Academic Years',   icon: CalendarDays },
+  { id: 'whatsapp',  label: 'WhatsApp',         icon: MessageCircle },
+  { id: 'webhooks',  label: 'Webhooks',         icon: Webhook },
+  { id: 'backup',    label: 'Backup & Restore', icon: DatabaseBackup },
 ];
 
 const WEBHOOK_EVENTS = [
@@ -537,6 +539,142 @@ function BackupTab({ dark }) {
   );
 }
 
+/* ─── WhatsApp Settings Tab ─────────────────────────────────────── */
+const WA_EVENTS = [
+  { key: 'wa_fee_reminder',    label: 'Fee Reminder',     desc: 'Auto-send when fee is due' },
+  { key: 'wa_absence_alert',   label: 'Absence Alert',    desc: 'Notify parent when student is absent' },
+  { key: 'wa_result_publish',  label: 'Result Published', desc: 'Notify when exam results are out' },
+  { key: 'wa_exam_schedule',   label: 'Exam Schedule',    desc: 'Notify 2 days before exam' },
+];
+function WhatsAppSettingsTab({ dark }) {
+  const s = useStyles(dark);
+  const [form,    setForm]    = useState({ WA_PHONE_NUMBER_ID: '', WA_ACCESS_TOKEN: '', WA_ENABLED: false });
+  const [events,  setEvents]  = useState({});
+  const [showToken, setShowToken] = useState(false);
+  const [saving,  setSaving]  = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testPhone, setTestPhone] = useState('');
+
+  useEffect(() => {
+    getSettings()
+      .then(r => {
+        const d = r.data?.data ?? r.data ?? {};
+        setForm({
+          WA_PHONE_NUMBER_ID: d.WA_PHONE_NUMBER_ID || '',
+          WA_ACCESS_TOKEN:    d.WA_ACCESS_TOKEN    || '',
+          WA_ENABLED:         d.WA_ENABLED === 'true' || d.WA_ENABLED === true,
+        });
+        const ev = {};
+        WA_EVENTS.forEach(e => { ev[e.key] = d[e.key] === 'true' || d[e.key] === true; });
+        setEvents(ev);
+      })
+      .catch(() => {});
+  }, []);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const payload = { ...form, WA_ENABLED: String(form.WA_ENABLED) };
+      WA_EVENTS.forEach(e => { payload[e.key] = String(events[e.key] || false); });
+      await saveSettings(payload);
+      toast.success('WhatsApp settings saved');
+    } catch {
+      toast.error('Save failed');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleTest() {
+    if (!testPhone) return toast.error('Enter a phone number to test');
+    setTesting(true);
+    try {
+      await sendWhatsApp({ phone: testPhone, template: 'test_message', params: [] });
+      toast.success('Test message sent — check your WhatsApp');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Test failed — check credentials');
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <p className={s.section}>WhatsApp Business API</p>
+        <div className="space-y-3">
+          <div>
+            <label className={s.lbl}>Phone Number ID</label>
+            <input value={form.WA_PHONE_NUMBER_ID}
+              onChange={e => setForm(p => ({ ...p, WA_PHONE_NUMBER_ID: e.target.value }))}
+              placeholder="From Meta Business → WhatsApp → Phone numbers"
+              className={s.inp} />
+          </div>
+          <div>
+            <label className={s.lbl}>Access Token</label>
+            <div className="relative">
+              <input
+                type={showToken ? 'text' : 'password'}
+                value={form.WA_ACCESS_TOKEN}
+                onChange={e => setForm(p => ({ ...p, WA_ACCESS_TOKEN: e.target.value }))}
+                placeholder="Permanent token from Meta Developer Console"
+                className={`${s.inp} pr-10`} />
+              <button type="button" onClick={() => setShowToken(p => !p)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                {showToken ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
+          </div>
+          <label className="flex items-center gap-3 cursor-pointer select-none">
+            <div className={`w-10 h-5 rounded-full transition-colors ${form.WA_ENABLED ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+              onClick={() => setForm(p => ({ ...p, WA_ENABLED: !p.WA_ENABLED }))}>
+              <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${form.WA_ENABLED ? 'translate-x-5' : 'translate-x-0'}`} />
+            </div>
+            <span className={`text-sm font-medium ${dark ? 'text-slate-300' : 'text-slate-700'}`}>Enable WhatsApp notifications</span>
+          </label>
+        </div>
+      </div>
+
+      <div>
+        <p className={s.section}>Notification Events</p>
+        <div className="space-y-2">
+          {WA_EVENTS.map(ev => (
+            <label key={ev.key} className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer ${dark ? 'border-slate-700 hover:border-slate-600' : 'border-slate-200 hover:border-slate-300'}`}>
+              <div>
+                <p className={`text-sm font-medium ${dark ? 'text-slate-200' : 'text-slate-800'}`}>{ev.label}</p>
+                <p className="text-xs text-slate-400">{ev.desc}</p>
+              </div>
+              <div className={`w-9 h-5 rounded-full transition-colors flex-shrink-0 ${events[ev.key] ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                onClick={() => setEvents(p => ({ ...p, [ev.key]: !p[ev.key] }))}>
+                <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${events[ev.key] ? 'translate-x-4' : 'translate-x-0'}`} />
+              </div>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <p className={s.section}>Test Connection</p>
+        <div className="flex gap-3">
+          <input value={testPhone} onChange={e => setTestPhone(e.target.value)}
+            placeholder="+923001234567"
+            className={`${s.inp} flex-1`} />
+          <button onClick={handleTest} disabled={testing}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 whitespace-nowrap">
+            {testing ? <Clock size={14} className="animate-spin" /> : <MessageCircle size={14} />}
+            Send Test
+          </button>
+        </div>
+      </div>
+
+      <button onClick={handleSave} disabled={saving}
+        className="w-full py-2.5 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-50 text-sm">
+        {saving ? 'Saving…' : 'Save WhatsApp Settings'}
+      </button>
+    </div>
+  );
+}
+
 /* ─── Webhooks Tab ─────────────────────────────────────────────── */
 function WebhooksTab({ dark }) {
   const s = useStyles(dark);
@@ -930,10 +1068,11 @@ export default function SettingsPage() {
 
         {/* Tab content */}
         <div className={`flex-1 rounded-2xl border p-6 ${cardBg}`}>
-          {tab === 'school'   && <SchoolSettingsTab dark={dark} />}
-          {tab === 'academic' && <AcademicYearsTab dark={dark} />}
-          {tab === 'webhooks' && <WebhooksTab dark={dark} />}
-          {tab === 'backup'   && <BackupTab dark={dark} />}
+          {tab === 'school'    && <SchoolSettingsTab dark={dark} />}
+          {tab === 'academic'  && <AcademicYearsTab dark={dark} />}
+          {tab === 'whatsapp'  && <WhatsAppSettingsTab dark={dark} />}
+          {tab === 'webhooks'  && <WebhooksTab dark={dark} />}
+          {tab === 'backup'    && <BackupTab dark={dark} />}
         </div>
 
       </div>

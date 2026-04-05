@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Plus, BookOpen, Clock, CheckCircle, AlertCircle, Pencil, Trash2, X, Calendar, Eye, Users } from 'lucide-react';
+import { Plus, BookOpen, Clock, CheckCircle, AlertCircle, Pencil, Trash2, X, Calendar, Eye, Users, Bell, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Layout          from '../components/layout/Layout';
 import { INPUT_CLS, SELECT_CLS } from '../components/ui/Input';
@@ -10,7 +10,7 @@ import EmptyState from '../components/ui/EmptyState';
 import { getHomework, createHomework, updateHomework, deleteHomework } from '../api/homework';
 import { getClasses } from '../api/classes';
 import { getSubjects } from '../api/subjects';
-import { getSubmissions, initSubmissions, checkSubmission } from '../api/homeworkSubmissions';
+import { getSubmissions, initSubmissions, checkSubmission, getSubmissionStats, sendReminder } from '../api/homeworkSubmissions';
 
 const STATUS_COLORS = {
   active:    'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800/40',
@@ -243,10 +243,71 @@ function SubmissionsModal({ hw, onClose }) {
   );
 }
 
+/* ── Submission stats badge ── */
+function SubmissionBadge({ stats, hwId, onRemind }) {
+  const [reminding, setReminding] = useState(false);
+  if (!stats) return null;
+
+  const submitted = Number(stats.submitted_count || 0);
+  const total     = Number(stats.total_students  || 0);
+  const missing   = total - submitted;
+  const pct       = total > 0 ? Math.round((submitted / total) * 100) : 0;
+
+  const handleRemind = async (e) => {
+    e.stopPropagation();
+    setReminding(true);
+    try {
+      const r = await sendReminder(hwId);
+      toast.success(r.data?.message || `Reminder sent`);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to send reminder');
+    }
+    setReminding(false);
+  };
+
+  return (
+    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+      {/* Progress chip */}
+      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+        <div className="flex items-center gap-1">
+          <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">
+            {submitted}/{total}
+          </span>
+          <span className="text-[10px] text-slate-400">submitted</span>
+        </div>
+        {/* Mini progress bar */}
+        <div className="w-16 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+          <div className="h-full rounded-full transition-all"
+            style={{ width: `${pct}%`, background: pct === 100 ? '#10b981' : pct >= 60 ? '#6366f1' : '#f59e0b' }} />
+        </div>
+        <span className="text-[10px] font-bold tabular-nums"
+          style={{ color: pct === 100 ? '#10b981' : pct >= 60 ? '#6366f1' : '#f59e0b' }}>
+          {pct}%
+        </span>
+      </div>
+
+      {/* Remind button — only shown when some students haven't submitted */}
+      {missing > 0 && (
+        <button
+          onClick={handleRemind}
+          disabled={reminding}
+          className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 hover:bg-amber-100 transition disabled:opacity-50"
+        >
+          {reminding
+            ? <Loader2 size={9} className="animate-spin" />
+            : <Bell size={9} />}
+          Remind {missing}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function HomeworkPage() {
   const [items,       setItems]       = useState([]);
   const [classes,     setClasses]     = useState([]);
   const [subjects,    setSubjects]    = useState([]);
+  const [stats,       setStats]       = useState({});  // keyed by homework id
   const [loading,     setLoading]     = useState(true);
   const [classFilter, setClassFilter] = useState('');
   const [statusFilt,  setStatusFilt]  = useState('active');
@@ -261,7 +322,20 @@ export default function HomeworkPage() {
       if (classFilter) params.class_id = classFilter;
       if (statusFilt)  params.status   = statusFilt;
       const r = await getHomework(params);
-      setItems(Array.isArray(r.data) ? r.data : []);
+      const hw = Array.isArray(r.data) ? r.data : [];
+      setItems(hw);
+
+      // Fetch submission stats in background — don't block the list render
+      if (hw.length > 0) {
+        getSubmissionStats(classFilter ? { class_id: classFilter } : {})
+          .then(sr => {
+            const arr  = sr.data?.data ?? sr.data ?? [];
+            const map  = {};
+            (Array.isArray(arr) ? arr : []).forEach(s => { map[s.id] = s; });
+            setStats(map);
+          })
+          .catch(() => {}); // stats are non-critical
+      }
     } catch { toast.error('Failed to load homework'); }
     finally { setLoading(false); }
   }, [classFilter, statusFilt]);
@@ -371,6 +445,7 @@ export default function HomeworkPage() {
                           </span>
                         </div>
                         {h.description && <p className="text-xs text-slate-400 dark:text-slate-600 mt-1 line-clamp-2">{h.description}</p>}
+                        <SubmissionBadge stats={stats[h.id]} hwId={h.id} />
                       </div>
                       <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-all mt-0.5">
                         <button onClick={() => setSubsModal(h)} title="View Submissions"

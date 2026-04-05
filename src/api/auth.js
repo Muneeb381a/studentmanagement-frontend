@@ -7,3 +7,6 @@ export const getMe          = ()     => api.get('/auth/me');
 export const changePassword = (data) => api.put('/auth/change-password',   data);
 export const getSessions    = ()     => api.get('/auth/sessions');
 export const revokeSession  = (id)   => api.delete(`/auth/sessions/${id}`);
+
+// Resolves a school code to school info — called before login (no JWT needed)
+export const resolveSchool  = (code) => api.get('/schools/resolve', { params: { code } });

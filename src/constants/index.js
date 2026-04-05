@@ -34,6 +34,15 @@ import {
   Video,
   HardHat,
   Zap,
+  BarChart2,
+  Building2,
+  AlertTriangle,
+  MessageCircle,
+  Sparkles,
+  ShieldCheck,
+  Activity,
+  CreditCard,
+  FolderOpen,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -66,6 +75,10 @@ export const NAV_LINKS = [
   { label: 'Dashboard', to: '/teacher-dashboard', icon: LayoutDashboard, description: 'Teacher portal', adminSkip: true },
   { label: 'Dashboard', to: '/student-dashboard', icon: LayoutDashboard, description: 'Student portal',  adminSkip: true },
   { label: 'Dashboard', to: '/parent-dashboard',  icon: LayoutDashboard, description: 'My child overview', adminSkip: true },
+
+  // Parent-only pages (flat, visible to parent role only via ROLE_LINKS)
+  { label: 'Messages',   to: '/parent-messages',   icon: MessageSquare, description: 'Message teachers',  adminSkip: true },
+  { label: 'Fee Ledger', to: '/parent-fee-ledger', icon: Banknote,      description: 'Full fee history',   adminSkip: true },
 
   // ── People ────────────────────────────────────────────────────────────────
   {
@@ -104,8 +117,9 @@ export const NAV_LINKS = [
     color: '#10b981',
     group: true,
     children: [
-      { label: 'Attendance',    to: '/attendance',   icon: ClipboardCheck, description: 'Daily tracking' },
-      { label: 'Late Arrivals', to: '/late-arrivals', icon: Clock,         description: 'Late arrival register' },
+      { label: 'Quick Attendance', to: '/quick-attendance', icon: Zap,           description: 'One-tap daily attendance' },
+      { label: 'Attendance',       to: '/attendance',       icon: ClipboardCheck, description: 'Daily tracking' },
+      { label: 'Late Arrivals',    to: '/late-arrivals',    icon: Clock,          description: 'Late arrival register' },
     ],
   },
 
@@ -117,6 +131,7 @@ export const NAV_LINKS = [
     group: true,
     children: [
       { label: 'Exams',       to: '/exams',       icon: FileBarChart2, description: 'Marks & results' },
+      { label: 'Gradebook',   to: '/gradebook',   icon: BarChart2,     description: 'Spreadsheet marks entry' },
       { label: 'Board Exams', to: '/board-exams', icon: GraduationCap, description: 'BISE registrations' },
       { label: 'Quizzes',     to: '/quizzes',     icon: FileCheck,     description: 'Online assessments' },
     ],
@@ -179,6 +194,14 @@ export const NAV_LINKS = [
     ],
   },
 
+  // ── Communication extras ──────────────────────────────────────────────────
+  {
+    label: 'WhatsApp',
+    to: '/whatsapp',
+    icon: MessageCircle,
+    description: 'Bulk messaging campaigns',
+  },
+
   // ── Reports ───────────────────────────────────────────────────────────────
   {
     label: 'Reports',
@@ -186,10 +209,27 @@ export const NAV_LINKS = [
     color: '#d97706',
     group: true,
     children: [
-      { label: 'Financial',     to: '/analytics/financial',      icon: BarChart3,     description: 'P&L analytics' },
-      { label: 'Annual Report', to: '/analytics/annual-report',  icon: FileText,      description: 'Year summary' },
-      { label: 'Custom Report', to: '/analytics/custom-report',  icon: ClipboardList, description: 'Custom exports' },
+      { label: 'At-Risk Students', to: '/risk',                       icon: AlertTriangle, description: 'AI risk scores' },
+      { label: 'Financial',        to: '/analytics/financial',        icon: BarChart3,     description: 'P&L analytics' },
+      { label: 'Annual Report',    to: '/analytics/annual-report',    icon: FileText,      description: 'Year summary' },
+      { label: 'Custom Report',    to: '/analytics/custom-report',    icon: ClipboardList, description: 'Custom exports' },
     ],
+  },
+
+  // ── Resources extras ──────────────────────────────────────────────────────
+  {
+    label: 'Documents',
+    to: '/documents',
+    icon: FolderOpen,
+    description: 'Student document storage',
+  },
+
+  // ── Academic extras ───────────────────────────────────────────────────────
+  {
+    label: 'AI Timetable',
+    to: '/timetable-generator',
+    icon: Sparkles,
+    description: 'Auto-generate conflict-free timetable',
   },
 
   // ── Automation ────────────────────────────────────────────────────────────
@@ -206,6 +246,34 @@ export const NAV_LINKS = [
     to: '/settings',
     icon: Settings,
     description: 'School info & configuration',
+  },
+
+  // ── Admin tools ───────────────────────────────────────────────────────────
+  {
+    label: 'Audit Logs',
+    to: '/audit-logs',
+    icon: ShieldCheck,
+    description: 'Full action history',
+  },
+  {
+    label: 'System Health',
+    to: '/system-health',
+    icon: Activity,
+    description: 'Performance & uptime metrics',
+  },
+  {
+    label: 'Billing',
+    to: '/billing',
+    icon: CreditCard,
+    description: 'Plan & subscription management',
+  },
+
+  // ── Super Admin (flat, admin-only) ────────────────────────────────────────
+  {
+    label: 'Super Admin',
+    to: '/super-admin',
+    icon: Building2,
+    description: 'Manage schools & tenants',
   },
 ];
 

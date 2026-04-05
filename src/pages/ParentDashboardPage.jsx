@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Banknote, CheckCircle2, NotebookPen, FileBarChart2,
-  TrendingUp, AlertTriangle, User, CalendarRange, CalendarCheck, Video,
+  TrendingUp, AlertTriangle, Video, MessageSquare,
+  BookOpen, RefreshCw, ChevronRight, Bell,
 } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { PageLoader } from '../components/ui/Spinner';
@@ -10,10 +11,9 @@ import { useAuth } from '../context/AuthContext';
 import { getStudent } from '../api/students';
 import { getStudentHistory } from '../api/attendance';
 import { getInvoices } from '../api/fees';
-import { getHomework } from '../api/homework';
-import { getExams } from '../api/exams';
 import { getMyClasses } from '../api/onlineClasses';
-
+import { getParentFeed } from '../api/parentFeed';
+import api from '../api/axios';
 
 function greeting() {
   const h = new Date().getHours();
@@ -24,47 +24,87 @@ function greeting() {
 
 const PKR = (n) => Number(n || 0).toLocaleString('en-PK', { maximumFractionDigits: 0 });
 
+function relativeTime(ts) {
+  if (!ts) return '';
+  const diff = Date.now() - new Date(ts).getTime();
+  const mins  = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days  = Math.floor(diff / 86400000);
+  if (mins < 1)   return 'Just now';
+  if (mins < 60)  return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  if (days === 1) return 'Yesterday';
+  if (days < 7)   return `${days} days ago`;
+  return new Date(ts).toLocaleDateString('en-PK', { month: 'short', day: 'numeric' });
+}
+
+const FEED_COLORS = {
+  attendance:   'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800',
+  homework:     'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800',
+  fee_invoice:  'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800',
+  fee_payment:  'bg-teal-50 dark:bg-teal-900/20 border-teal-200 dark:border-teal-800',
+  result:       'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800',
+  announcement: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800',
+};
+
+function FeedItem({ item }) {
+  const color = FEED_COLORS[item.type] || 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700';
+  return (
+    <div className={`flex gap-3 px-4 py-3 border-l-2 ${color} mx-4 mb-2 rounded-r-xl`}>
+      <span className="text-xl leading-none mt-0.5 shrink-0">{item.icon}</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-slate-800 dark:text-white leading-tight">{item.title}</p>
+        {item.subtitle && (
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">{item.subtitle}</p>
+        )}
+      </div>
+      <span className="text-[10px] text-slate-400 shrink-0 mt-0.5 whitespace-nowrap">{relativeTime(item.timestamp)}</span>
+    </div>
+  );
+}
+
 export default function ParentDashboardPage() {
   const { user } = useAuth();
-  const [child,      setChild]      = useState(null);
-  const [attendance, setAttendance] = useState([]);
-  const [invoices,   setInvoices]   = useState([]);
-  const [homework,   setHomework]   = useState([]);
-  const [exams,         setExams]         = useState([]);
-  const [events,        setEvents]        = useState([]);
+  const [child,         setChild]         = useState(null);
+  const [attendance,    setAttendance]    = useState([]);
+  const [invoices,      setInvoices]      = useState([]);
   const [onlineClasses, setOnlineClasses] = useState([]);
+  const [feed,          setFeed]          = useState([]);
+  const [feedLoading,   setFeedLoading]   = useState(true);
   const [loading,       setLoading]       = useState(true);
 
-  // entity_id = child's student_id for parents
   const childId   = user.entity_id;
   const thisMonth = new Date().toISOString().slice(0, 7);
+
+  const loadFeed = useCallback(async () => {
+    setFeedLoading(true);
+    try {
+      const res = await getParentFeed({ limit: 40 });
+      setFeed(Array.isArray(res.data?.data) ? res.data.data : []);
+    } catch { /* silent */ }
+    setFeedLoading(false);
+  }, []);
 
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const [childRes, attRes, invRes, hwRes, exRes, evRes, ocRes] = await Promise.all([
-          childId ? getStudent(childId)                                : Promise.resolve({ data: null }),
-          childId ? getStudentHistory(childId, thisMonth)              : Promise.resolve({ data: [] }),
-          childId ? getInvoices({ student_id: childId, limit: 10 })   : Promise.resolve({ data: [] }),
-          childId ? getHomework({ limit: 8 })                          : Promise.resolve({ data: [] }),
-          getExams({ limit: 5 }),
-          api.get('/events', { params: { visible_to_parents: true, limit: 5 } }).catch(() => ({ data: [] })),
+        const [childRes, attRes, invRes, ocRes] = await Promise.all([
+          childId ? getStudent(childId)                              : Promise.resolve({ data: null }),
+          childId ? getStudentHistory(childId, thisMonth)            : Promise.resolve({ data: [] }),
+          childId ? getInvoices({ student_id: childId, limit: 10 }) : Promise.resolve({ data: [] }),
           getMyClasses().catch(() => ({ data: [] })),
         ]);
 
         setChild(childRes.data?.data ?? childRes.data ?? null);
         setAttendance(Array.isArray(attRes.data) ? attRes.data : []);
         setInvoices(Array.isArray(invRes.data) ? invRes.data : []);
-        setHomework(Array.isArray(hwRes.data) ? hwRes.data : []);
-        setExams(Array.isArray(exRes.data) ? exRes.data : []);
-        const evData = evRes.data?.data ?? evRes.data ?? [];
-        setEvents(Array.isArray(evData) ? evData : []);
-        setOnlineClasses(Array.isArray(ocRes.data) ? ocRes.data.slice(0, 5) : []);
+        setOnlineClasses(Array.isArray(ocRes.data) ? ocRes.data.slice(0, 4) : []);
       } catch { /* silent */ }
       setLoading(false);
     };
     fetchAll();
-  }, [childId]);
+    loadFeed();
+  }, [childId, loadFeed]);
 
   const presentDays   = attendance.filter(r => r.status === 'present').length;
   const totalDays     = attendance.length;
@@ -72,8 +112,6 @@ export default function ParentDashboardPage() {
 
   const unpaidInvoices = invoices.filter(i => i.status === 'unpaid' || i.status === 'partial');
   const totalDue       = unpaidInvoices.reduce((s, i) => s + Number(i.balance || 0), 0);
-
-  const upcomingExams = exams.filter(e => e.status === 'scheduled').slice(0, 3);
 
   if (loading) return <Layout><PageLoader /></Layout>;
 
@@ -103,12 +141,23 @@ export default function ParentDashboardPage() {
               style={{ background: 'linear-gradient(135deg, #10b981, #34d399)' }}>
               {(child.name || 'S')[0]}
             </div>
-            <div>
+            <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-0.5">Your Child</p>
               <p className="text-lg font-extrabold text-slate-800 dark:text-white">{child.name}</p>
               <p className="text-sm text-slate-500">
                 {child.class_name || '—'} · Roll #{child.roll_number || '—'} · {child.status || 'active'}
               </p>
+            </div>
+            {/* Quick-action buttons */}
+            <div className="flex flex-col gap-2 shrink-0">
+              <Link to="/parent-messages"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 text-xs font-semibold transition-colors">
+                <MessageSquare size={12} /> Message Teacher
+              </Link>
+              <Link to="/parent-fee-ledger"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-700 dark:text-red-400 text-xs font-semibold transition-colors">
+                <Banknote size={12} /> Fee Ledger
+              </Link>
             </div>
           </div>
         ) : !childId ? (
@@ -120,116 +169,72 @@ export default function ParentDashboardPage() {
           </div>
         ) : null}
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-800">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center">
-                <CheckCircle2 size={18} className="text-emerald-500" />
-              </div>
+        {/* Stat chips */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-2 mb-2">
+              <CheckCircle2 size={16} className="text-emerald-500" />
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Attendance</p>
             </div>
             <p className="text-2xl font-extrabold text-slate-800 dark:text-white">
               {attendancePct !== null ? `${attendancePct}%` : '—'}
             </p>
-            <p className="text-xs text-slate-400 mt-1">{presentDays}/{totalDays} days this month</p>
+            <p className="text-xs text-slate-400 mt-0.5">{presentDays}/{totalDays} days</p>
           </div>
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-800">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center">
-                <Banknote size={18} className="text-red-500" />
-              </div>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-2 mb-2">
+              <Banknote size={16} className="text-red-500" />
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Due Balance</p>
             </div>
             <p className="text-2xl font-extrabold text-slate-800 dark:text-white">PKR {PKR(totalDue)}</p>
-            <p className="text-xs text-slate-400 mt-1">{unpaidInvoices.length} unpaid invoices</p>
+            <p className="text-xs text-slate-400 mt-0.5">{unpaidInvoices.length} invoices</p>
           </div>
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-800">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center">
-                <NotebookPen size={18} className="text-purple-500" />
-              </div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Homework</p>
+          <Link to="/parent-messages"
+            className="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-slate-800 hover:border-emerald-300 transition-colors">
+            <div className="flex items-center gap-2 mb-2">
+              <MessageSquare size={16} className="text-emerald-500" />
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Messages</p>
             </div>
-            <p className="text-2xl font-extrabold text-slate-800 dark:text-white">{homework.length}</p>
-            <p className="text-xs text-slate-400 mt-1">active assignments</p>
-          </div>
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-800">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center">
-                <FileBarChart2 size={18} className="text-amber-500" />
-              </div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Upcoming Exams</p>
+            <p className="text-2xl font-extrabold text-slate-800 dark:text-white">→</p>
+            <p className="text-xs text-slate-400 mt-0.5">Contact teachers</p>
+          </Link>
+          <Link to="/parent-fee-ledger"
+            className="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-slate-800 hover:border-red-300 transition-colors">
+            <div className="flex items-center gap-2 mb-2">
+              <FileBarChart2 size={16} className="text-amber-500" />
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Fee Ledger</p>
             </div>
-            <p className="text-2xl font-extrabold text-slate-800 dark:text-white">{upcomingExams.length}</p>
-            <p className="text-xs text-slate-400 mt-1">scheduled</p>
-          </div>
+            <p className="text-2xl font-extrabold text-slate-800 dark:text-white">→</p>
+            <p className="text-xs text-slate-400 mt-0.5">Full history</p>
+          </Link>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-          {/* Fee invoices */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
-            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
-              <Banknote size={16} className="text-red-500" />
-              <h2 className="font-bold text-slate-800 dark:text-white text-sm">Fee Invoices</h2>
-            </div>
-            {invoices.length === 0 ? (
-              <p className="px-5 py-8 text-center text-sm text-slate-400">No invoices</p>
-            ) : (
-              <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                {invoices.slice(0, 6).map(inv => (
-                  <div key={inv.id} className="px-5 py-3 flex items-center gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-800 dark:text-white truncate">
-                        {inv.fee_head_name || 'Fee'} — {inv.month || '—'}
-                      </p>
-                      <p className="text-[11px] text-slate-400">
-                        PKR {PKR(inv.amount)} · Balance: PKR {PKR(inv.balance)}
-                      </p>
-                    </div>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      inv.status === 'paid'
-                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-                        : inv.status === 'partial'
-                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                        : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                    }`}>{inv.status}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+        {/* ── LIVE FEED ─────────────────────────────────────────── */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
+          <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+            <Bell size={16} className="text-emerald-500" />
+            <h2 className="font-bold text-slate-800 dark:text-white text-sm flex-1">Live Activity Feed</h2>
+            <button
+              onClick={loadFeed}
+              disabled={feedLoading}
+              className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+            >
+              <RefreshCw size={11} className={feedLoading ? 'animate-spin' : ''} />
+              Refresh
+            </button>
           </div>
 
-          {/* Homework */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
-            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
-              <NotebookPen size={16} className="text-purple-500" />
-              <h2 className="font-bold text-slate-800 dark:text-white text-sm">Child's Homework</h2>
+          {feedLoading && feed.length === 0 ? (
+            <div className="py-10 flex items-center justify-center">
+              <RefreshCw size={20} className="animate-spin text-slate-300" />
             </div>
-            {homework.length === 0 ? (
-              <p className="px-5 py-8 text-center text-sm text-slate-400">No homework</p>
-            ) : (
-              <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                {homework.slice(0, 6).map(hw => {
-                  const overdue = hw.due_date && new Date(hw.due_date) < new Date();
-                  return (
-                    <div key={hw.id} className="px-5 py-3 flex items-start gap-3">
-                      <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${overdue ? 'bg-red-400' : 'bg-emerald-400'}`} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-slate-800 dark:text-white truncate">{hw.title}</p>
-                        <p className="text-[11px] text-slate-400">
-                          {hw.subject_name || '—'} · Due: {hw.due_date || '—'}
-                        </p>
-                      </div>
-                      {overdue && <AlertTriangle size={13} className="text-red-400 shrink-0 mt-0.5" />}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
+          ) : feed.length === 0 ? (
+            <p className="px-5 py-8 text-center text-sm text-slate-400">No recent activity</p>
+          ) : (
+            <div className="py-3">
+              {feed.map((item, i) => <FeedItem key={i} item={item} />)}
+            </div>
+          )}
         </div>
 
         {/* Online Classes */}
@@ -242,7 +247,7 @@ export default function ParentDashboardPage() {
             <ul className="divide-y divide-slate-100 dark:divide-slate-800">
               {onlineClasses.map(oc => {
                 const isLive = oc.status === 'live';
-                const dt = new Date(oc.scheduled_at);
+                const dt     = new Date(oc.scheduled_at);
                 const dateStr = dt.toLocaleDateString('en-PK', { month: 'short', day: 'numeric' });
                 const timeStr = dt.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
                 return (
@@ -277,7 +282,7 @@ export default function ParentDashboardPage() {
           </div>
         )}
 
-        {/* Attendance this month */}
+        {/* Attendance bar */}
         {attendance.length > 0 && (
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
             <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
@@ -290,15 +295,10 @@ export default function ParentDashboardPage() {
                 <div className="flex-1 h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                   <div
                     className="h-full rounded-full transition-all duration-500"
-                    style={{
-                      width: `${attendancePct || 0}%`,
-                      background: 'linear-gradient(90deg, #10b981, #34d399)',
-                    }}
+                    style={{ width: `${attendancePct || 0}%`, background: 'linear-gradient(90deg, #10b981, #34d399)' }}
                   />
                 </div>
-                <span className="text-sm font-bold text-slate-700 dark:text-white w-10 text-right">
-                  {attendancePct ?? 0}%
-                </span>
+                <span className="text-sm font-bold text-slate-700 dark:text-white w-10 text-right">{attendancePct ?? 0}%</span>
               </div>
               <div className="flex gap-4 text-xs">
                 <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">

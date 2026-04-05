@@ -9,9 +9,9 @@ import NotificationBell from './NotificationBell';
 // Paths each role is allowed to see
 const ROLE_LINKS = {
   admin:   null, // null = all
-  teacher: ['/teacher-dashboard', '/timetable', '/attendance', '/classes', '/students', '/subjects', '/online-classes', '/homework', '/exams', '/announcements', '/events', '/messaging', '/diary'],
+  teacher: ['/teacher-dashboard', '/timetable', '/attendance', '/quick-attendance', '/gradebook', '/classes', '/students', '/subjects', '/online-classes', '/homework', '/exams', '/announcements', '/events', '/messaging', '/parent-messages', '/diary'],
   student: ['/student-dashboard', '/online-classes', '/messaging', '/diary'],
-  parent:  ['/parent-dashboard',  '/online-classes', '/messaging', '/diary'],
+  parent:  ['/parent-dashboard', '/parent-messages', '/parent-fee-ledger', '/online-classes', '/messaging', '/diary', '/meetings'],
 };
 
 const ROLE_COLORS = {

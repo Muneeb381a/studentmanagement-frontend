@@ -479,6 +479,7 @@ function AssignTeachersTab() {
         <EmptyBox message="No subjects assigned to this class yet. Go to 'Assign to Classes' first." />
       ) : (
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80">
@@ -532,6 +533,7 @@ function AssignTeachersTab() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

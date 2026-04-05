@@ -251,7 +251,7 @@ export default function DashboardPage() {
     return { malePct: m, femalePct: f, otherPct: Math.max(0, 100 - m - f) };
   }, [counts.males, counts.females, counts.total]);
 
-  const totalAlerts = (alerts?.fee_defaulters || 0) + (alerts?.chronic_absent || 0) + (alerts?.overdue_books || 0);
+  const totalAlerts = (alerts?.fee_defaulters || 0) + (alerts?.chronic_absent || 0) + (alerts?.overdue_books || 0) + (alerts?.high_risk_students || 0);
 
   // ── Error toast ──────────────────────────────────────────
   if (isError) {
@@ -366,9 +366,10 @@ export default function DashboardPage() {
                   <AlertTriangle size={15} />
                   <span className="text-xs font-bold uppercase tracking-wide">Needs Attention</span>
                 </div>
-                <AlertPill icon={Banknote}   count={alerts?.fee_defaulters} label="fee defaulters"    color="#dc2626" onClick={() => navigate('/fees')} />
-                <AlertPill icon={UserX}      count={alerts?.chronic_absent}  label="chronic absentees" color="#d97706" onClick={() => navigate('/attendance')} />
-                <AlertPill icon={BookMarked} count={alerts?.overdue_books}   label="overdue books"    color="#7c3aed" onClick={() => navigate('/library')} />
+                <AlertPill icon={Banknote}     count={alerts?.fee_defaulters}     label="fee defaulters"    color="#dc2626" onClick={() => navigate('/fees')} />
+                <AlertPill icon={UserX}        count={alerts?.chronic_absent}     label="chronic absentees" color="#d97706" onClick={() => navigate('/attendance')} />
+                <AlertPill icon={BookMarked}   count={alerts?.overdue_books}      label="overdue books"     color="#7c3aed" onClick={() => navigate('/library')} />
+                <AlertPill icon={AlertTriangle} count={alerts?.high_risk_students} label="high-risk students" color="#ef4444" onClick={() => navigate('/risk')} />
               </div>
             </div>
           )}

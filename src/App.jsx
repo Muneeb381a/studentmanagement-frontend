@@ -95,6 +95,18 @@ const AuditLogsPage          = lazy(() => import('./pages/AuditLogsPage'));
 const SystemHealthPage       = lazy(() => import('./pages/SystemHealthPage'));
 const BillingPage            = lazy(() => import('./pages/BillingPage'));
 const DocumentsPage          = lazy(() => import('./pages/DocumentsPage'));
+const FeeInstallmentsPage    = lazy(() => import('./pages/FeeInstallmentsPage'));
+const DisciplinePage         = lazy(() => import('./pages/DisciplinePage'));
+const SubstitutionsPage      = lazy(() => import('./pages/SubstitutionsPage'));
+const ComplaintsPage         = lazy(() => import('./pages/ComplaintsPage'));
+const ExamSeatingPage        = lazy(() => import('./pages/ExamSeatingPage'));
+const HostelPage             = lazy(() => import('./pages/HostelPage'));
+const BranchesPage           = lazy(() => import('./pages/BranchesPage'));
+const BudgetPage             = lazy(() => import('./pages/BudgetPage'));
+const WebsiteBuilderPage     = lazy(() => import('./pages/WebsiteBuilderPage'));
+const LiveTrackingPage       = lazy(() => import('./pages/LiveTrackingPage'));
+const DriverTrackingPage     = lazy(() => import('./pages/DriverTrackingPage'));
+const ChatPage               = lazy(() => import('./pages/ChatPage'));
 /* Redirect / → role-appropriate home */
 function RoleRedirect() {
   const { user } = useAuth();
@@ -439,6 +451,18 @@ export default function App() {
             <Route path="/system-health"        element={<ProtectedRoute roles={['admin']}><SystemHealthPage /></ProtectedRoute>} />
             <Route path="/billing"              element={<ProtectedRoute roles={['admin']}><BillingPage /></ProtectedRoute>} />
             <Route path="/documents"            element={<ProtectedRoute roles={['admin','teacher']}><DocumentsPage /></ProtectedRoute>} />
+            <Route path="/fee-installments"     element={<ProtectedRoute roles={['admin']}><FeeInstallmentsPage /></ProtectedRoute>} />
+            <Route path="/discipline"           element={<ProtectedRoute roles={['admin','teacher']}><DisciplinePage /></ProtectedRoute>} />
+            <Route path="/substitutions"        element={<ProtectedRoute roles={['admin','teacher']}><SubstitutionsPage /></ProtectedRoute>} />
+            <Route path="/complaints"           element={<ProtectedRoute><ComplaintsPage /></ProtectedRoute>} />
+            <Route path="/exam-seating"         element={<ProtectedRoute roles={['admin']}><ExamSeatingPage /></ProtectedRoute>} />
+            <Route path="/hostel"               element={<ProtectedRoute roles={['admin']}><HostelPage /></ProtectedRoute>} />
+            <Route path="/branches"             element={<ProtectedRoute roles={['admin']}><BranchesPage /></ProtectedRoute>} />
+            <Route path="/budget"               element={<ProtectedRoute roles={['admin']}><BudgetPage /></ProtectedRoute>} />
+            <Route path="/website-builder"      element={<ProtectedRoute roles={['admin']}><WebsiteBuilderPage /></ProtectedRoute>} />
+            <Route path="/class-chat"           element={<ProtectedRoute roles={['admin','teacher','student']}><ChatPage /></ProtectedRoute>} />
+            <Route path="/live-tracking"        element={<ProtectedRoute roles={['admin','parent']}><LiveTrackingPage /></ProtectedRoute>} />
+            <Route path="/driver-tracking"      element={<ProtectedRoute roles={['admin','teacher']}><DriverTrackingPage /></ProtectedRoute>} />
 
             <Route path="*" element={<NotFoundPage />} />
           </Routes>

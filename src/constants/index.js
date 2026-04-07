@@ -43,6 +43,17 @@ import {
   Activity,
   CreditCard,
   FolderOpen,
+  ShieldAlert,
+  Layers,
+  UserX,
+  LayoutGrid,
+  Home,
+  GitBranch,
+  PieChart,
+  Globe,
+  MapPin,
+  Navigation,
+  MessagesSquare,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -77,8 +88,10 @@ export const NAV_LINKS = [
   { label: 'Dashboard', to: '/parent-dashboard',  icon: LayoutDashboard, description: 'My child overview', adminSkip: true },
 
   // Parent-only pages (flat, visible to parent role only via ROLE_LINKS)
-  { label: 'Messages',   to: '/parent-messages',   icon: MessageSquare, description: 'Message teachers',  adminSkip: true },
-  { label: 'Fee Ledger', to: '/parent-fee-ledger', icon: Banknote,      description: 'Full fee history',   adminSkip: true },
+  { label: 'Messages',      to: '/parent-messages',   icon: MessageSquare, description: 'Message teachers',    adminSkip: true },
+  { label: 'Fee Ledger',    to: '/parent-fee-ledger', icon: Banknote,      description: 'Full fee history',    adminSkip: true },
+  { label: 'Live Tracking', to: '/live-tracking',     icon: MapPin,        description: 'Track school van',    adminSkip: true },
+  { label: 'Class Chat',   to: '/class-chat',        icon: MessagesSquare,description: 'Chat with classmates', adminSkip: true },
 
   // ── People ────────────────────────────────────────────────────────────────
   {
@@ -159,8 +172,9 @@ export const NAV_LINKS = [
     color: '#ec4899',
     group: true,
     children: [
-      { label: 'Announcements', to: '/announcements', icon: Megaphone,     description: 'Notices & updates' },
-      { label: 'Messages',      to: '/messaging',     icon: MessageSquare, description: 'Direct messaging' },
+      { label: 'Announcements', to: '/announcements', icon: Megaphone,        description: 'Notices & updates' },
+      { label: 'Class Chat',    to: '/class-chat',    icon: MessagesSquare,  description: 'Real-time class rooms' },
+      { label: 'Messages',      to: '/messaging',     icon: MessageSquare,   description: 'Direct messaging' },
       { label: 'Events',        to: '/events',        icon: CalendarRange, description: 'School events' },
       { label: 'PTM Scheduler', to: '/meetings',      icon: CalendarCheck, description: 'Parent meetings' },
       { label: 'Diary',         to: '/diary',         icon: BookText,      description: 'Class diary' },
@@ -186,11 +200,13 @@ export const NAV_LINKS = [
     color: '#7c3aed',
     group: true,
     children: [
-      { label: 'Library',    to: '/library',   icon: BookMarked,  description: 'Books & issues' },
-      { label: 'Inventory',  to: '/inventory', icon: Package,     description: 'Stock & assets' },
-      { label: 'Transport',  to: '/transport', icon: Bus,         description: 'Buses & routes' },
-      { label: 'Canteen',    to: '/canteen',   icon: ShoppingCart, description: 'POS & revenue' },
-      { label: 'Medical',    to: '/medical',   icon: Stethoscope, description: 'Health records' },
+      { label: 'Library',       to: '/library',          icon: BookMarked,  description: 'Books & issues' },
+      { label: 'Inventory',     to: '/inventory',        icon: Package,     description: 'Stock & assets' },
+      { label: 'Transport',     to: '/transport',        icon: Bus,         description: 'Buses & routes' },
+      { label: 'Live Tracking', to: '/live-tracking',   icon: MapPin,      description: 'Real-time bus map' },
+      { label: 'Driver Panel',  to: '/driver-tracking', icon: Navigation,  description: 'GPS driver dashboard' },
+      { label: 'Canteen',       to: '/canteen',          icon: ShoppingCart, description: 'POS & revenue' },
+      { label: 'Medical',       to: '/medical',          icon: Stethoscope, description: 'Health records' },
     ],
   },
 
@@ -266,6 +282,76 @@ export const NAV_LINKS = [
     to: '/billing',
     icon: CreditCard,
     description: 'Plan & subscription management',
+  },
+
+  // ── New Features ──────────────────────────────────────────────────────────
+  {
+    label: 'Fee Installments',
+    to: '/fee-installments',
+    icon: Layers,
+    description: 'Installment plans & tracking',
+  },
+  {
+    label: 'Discipline',
+    to: '/discipline',
+    icon: ShieldAlert,
+    description: 'Student behavior & incidents',
+  },
+  {
+    label: 'Substitutions',
+    to: '/substitutions',
+    icon: UserX,
+    description: 'Teacher substitution manager',
+  },
+  {
+    label: 'Complaints',
+    to: '/complaints',
+    icon: MessageSquare,
+    description: 'Complaints & feedback portal',
+  },
+  {
+    label: 'Exam Seating',
+    to: '/exam-seating',
+    icon: LayoutGrid,
+    description: 'Auto-generate exam seating plans',
+  },
+  {
+    label: 'Hostel',
+    to: '/hostel',
+    icon: Home,
+    description: 'Boarding & hostel management',
+  },
+  {
+    label: 'Branches',
+    to: '/branches',
+    icon: GitBranch,
+    description: 'Multi-campus branch management',
+  },
+  {
+    label: 'Budget',
+    to: '/budget',
+    icon: PieChart,
+    description: 'Annual budget planning & tracking',
+  },
+  {
+    label: 'Website Builder',
+    to: '/website-builder',
+    icon: Globe,
+    description: 'Manage school public website',
+  },
+
+  // ── Live Tracking ─────────────────────────────────────────────────────────
+  {
+    label: 'Live Tracking',
+    to: '/live-tracking',
+    icon: MapPin,
+    description: 'Real-time bus location for parents',
+  },
+  {
+    label: 'Driver Panel',
+    to: '/driver-tracking',
+    icon: Navigation,
+    description: 'GPS tracking dashboard for drivers',
   },
 
   // ── Super Admin (flat, admin-only) ────────────────────────────────────────

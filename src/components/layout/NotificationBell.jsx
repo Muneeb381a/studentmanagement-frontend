@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { tokenStorage } from '../../api/axios';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -62,8 +63,9 @@ export default function NotificationBell() {
     finally { setLoading(false); }
   }, []);
 
-  // Poll unread count every 60s
+  // Poll unread count every 60s — only when authenticated
   useEffect(() => {
+    if (!tokenStorage.getAccess()) return;
     loadCount();
     const id = setInterval(loadCount, 60000);
     return () => clearInterval(id);

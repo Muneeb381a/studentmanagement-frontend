@@ -90,23 +90,29 @@ export default function DriverTrackingPage() {
   useEffect(() => {
     api.get('/transport/my-bus-driver')
       .then(r => {
-        setMyBus(r.data?.data);
+        // /my-bus-driver returns { success, data: busObject|null } — not an array,
+        // so the axios interceptor does NOT unwrap it; r.data has the full wrapper.
+        const bus = r.data?.data;
+        if (bus) {
+          setMyBus(bus);
+        } else {
+          // User is not a specific driver — find their bus from the full list
+          api.get('/transport/buses').then(r2 => {
+            // /transport/buses returns array response → interceptor unwraps to r2.data = array
+            const buses = Array.isArray(r2.data) ? r2.data : (r2.data?.data ?? []);
+            const mine = buses.find(b => b.driver_user_id === user?.id) || buses[0] || null;
+            setMyBus(mine);
+          }).catch(() => {});
+        }
       })
-      .catch(() => {
-        // fallback: load first bus assigned to this driver
-        api.get('/transport/buses').then(r => {
-          const buses = r.data?.data ?? [];
-          const mine = buses.find(b => b.driver_user_id === user?.id) || buses[0] || null;
-          setMyBus(mine);
-        }).catch(() => {});
-      });
+      .catch(() => {});
   }, [user?.id]);
 
   // ── Load route stops once bus known ────────────────────────────────────────
   useEffect(() => {
     if (!myBus?.id) return;
     getRouteStops(myBus.id)
-      .then(r => setStops(r.data?.data ?? []))
+      .then(r => { const d = r.data; setStops(Array.isArray(d) ? d : (d?.data ?? [])); })
       .catch(() => {});
   }, [myBus?.id]);
 
@@ -219,15 +225,19 @@ export default function DriverTrackingPage() {
     if (!myBus?.id) return toast.error('No bus assigned');
     setLoading(true);
     try {
-      // Socket emit first
-      const res = await emit('trip:start', { busId: myBus.id, tripType: 'morning' });
-      let tripId = res?.tripId;
+      // REST is primary (reliable); socket emit is fire-and-forget notification only
+      const r = await startTrip({
+        busId: myBus.id,
+        tripType: 'morning',
+        lat: lastPos?.lat,
+        lng: lastPos?.lng,
+      });
+      // Backend returns { success, data: trip } — not an array, so NOT unwrapped by interceptor
+      const trip = r.data?.data ?? r.data;
+      const tripId = trip?.id;
 
-      // REST fallback
-      if (!tripId) {
-        const r = await startTrip({ busId: myBus.id, tripType: 'morning' });
-        tripId = r.data?.data?.tripId;
-      }
+      // Notify connected clients via socket (non-blocking, no await)
+      emit('trip:start', { busId: myBus.id, tripType: 'morning' });
 
       tripIdRef.current = tripId;
       setCurrentTrip({ tripId });
@@ -330,7 +340,7 @@ export default function DriverTrackingPage() {
         <div>
           <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Driver Panel</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            {myBus ? `${myBus.name || myBus.plate_number}` : 'Loading bus…'}
+            {myBus ? `${myBus.bus_number || myBus.vehicle_number}` : 'Loading bus…'}
           </p>
         </div>
         <StatusBadge connected={connected} socketMode={socketMode} isTracking={isTracking} />
@@ -435,7 +445,7 @@ export default function DriverTrackingPage() {
               return (
                 <div key={stop.id} className="flex items-center gap-3 px-4 py-3">
                   {/* Order badge */}
-                  <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${picked || dropped ? 'bg-slate-300 dark:bg-slate-600' : 'bg-amber-400'}`}>
+                  <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${picked || dropped ? 'bg-slate-300 dark:bg-slate-600' : 'bg-amber-400'}`}>
                     {idx + 1}
                   </div>
                   {/* Stop info */}
@@ -457,7 +467,7 @@ export default function DriverTrackingPage() {
                   </div>
                   {/* Action buttons */}
                   {currentTrip && !dropped && (
-                    <div className="flex flex-col gap-1.5 flex-shrink-0">
+                    <div className="flex flex-col gap-1.5 shrink-0">
                       {!picked && (
                         <button
                           onClick={() => handlePicked(stop)}

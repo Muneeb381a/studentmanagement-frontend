@@ -30,9 +30,11 @@ export default function PageHeader({
     <div className={`flex items-center justify-between gap-4 flex-wrap ${className}`}>
       {/* Left — icon + title */}
       <div className="flex items-center gap-3 min-w-0">
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
-          <Icon size={20} className={iconColor} />
-        </div>
+        {Icon && (
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
+            <Icon size={20} className={iconColor} />
+          </div>
+        )}
         <div className="min-w-0">
           <h1 className="text-xl font-bold text-slate-800 dark:text-white leading-tight truncate">
             {title}

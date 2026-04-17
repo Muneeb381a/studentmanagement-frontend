@@ -93,7 +93,8 @@ function Input({ label, type = 'text', value, onChange, placeholder, className =
 
 // ── Payment Modal ──────────────────────────────────────────────
 function PaymentModal({ invoice, onClose, onPaid }) {
-  const net     = parseFloat(invoice.net_amount || invoice.total_amount) + parseFloat(invoice.fine_amount || 0) - parseFloat(invoice.discount_amount || 0);
+  // net_amount from the API already equals total_amount + fine_amount - discount_amount
+  const net     = parseFloat(invoice.net_amount ?? invoice.total_amount);
   const balance = net - parseFloat(invoice.paid_amount || 0);
 
   const [form, setForm] = useState({

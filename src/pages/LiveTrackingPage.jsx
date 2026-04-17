@@ -54,16 +54,20 @@ export default function LiveTrackingPage() {
 
   // ── Load initial data ─────────────────────────────────────────────────────
   useEffect(() => {
+    if (!user) { setLoading(false); return; }
     async function loadData() {
       setLoading(true);
       try {
         if (isAdmin) {
           const r = await getAllBusesLive();
-          setAllBuses(r.data?.data ?? []);
-          if (r.data?.data?.length) setSelectedBus(r.data.data[0].id);
+          // Axios interceptor unwraps {success,data:[...]} → r.data IS the array
+          const buses = Array.isArray(r.data) ? r.data : (r.data?.data ?? []);
+          setAllBuses(buses);
+          if (buses.length) setSelectedBus(buses[0].id);
         } else {
           const r = await getMyBus();
-          const firstChild = r.data?.data?.[0];
+          const rows = Array.isArray(r.data) ? r.data : (r.data?.data ?? []);
+          const firstChild = rows[0];
           if (firstChild) setBusInfo(firstChild);
         }
       } catch (err) {
@@ -73,7 +77,7 @@ export default function LiveTrackingPage() {
       }
     }
     loadData();
-  }, [isAdmin]);
+  }, [isAdmin, user]);
 
   // ── Student's own stop (for map highlight) ────────────────────────────────
   const studentStop = busInfo?.stop_lat

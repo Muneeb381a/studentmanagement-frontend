@@ -206,15 +206,16 @@ const MessageBubble = memo(function MessageBubble({
         {/* Bubble */}
         {editing ? (
           <div className="flex gap-2 w-full">
-            <input
+            <textarea
               autoFocus
+              rows={Math.min(editVal.split('\n').length, 6)}
               value={editVal}
               onChange={e => setEditVal(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleEdit(); if (e.key === 'Escape') setEditing(false); }}
-              className="flex-1 px-3 py-1.5 text-sm rounded-xl border border-indigo-400 bg-white dark:bg-slate-700 dark:text-white focus:outline-none"
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleEdit(); } if (e.key === 'Escape') setEditing(false); }}
+              className="flex-1 px-3 py-1.5 text-sm rounded-xl border border-indigo-400 bg-white dark:bg-slate-700 dark:text-white focus:outline-none resize-none"
             />
-            <button onClick={handleEdit} className="px-2 text-emerald-600"><Check size={16} /></button>
-            <button onClick={() => setEditing(false)} className="px-2 text-slate-400"><X size={16} /></button>
+            <button onClick={handleEdit} className="px-2 text-emerald-600 self-end pb-1"><Check size={16} /></button>
+            <button onClick={() => setEditing(false)} className="px-2 text-slate-400 self-end pb-1"><X size={16} /></button>
           </div>
         ) : (
           <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed ${

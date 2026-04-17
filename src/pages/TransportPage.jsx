@@ -1,111 +1,102 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import {
   Bus, MapPin, Users, PlusCircle, Pencil, Trash2,
-  Search, RefreshCw, X, ChevronDown, ChevronRight,
-  Navigation, Clock, Phone, UserCheck, AlertCircle,
-  CheckCircle2, Wrench, BarChart3, Route,
+  Search, RefreshCw, X, ChevronDown, Navigation,
+  Phone, UserCheck, AlertCircle, CheckCircle2,
+  Wrench, BarChart3, Route, ArrowRightLeft, Download,
+  IdCard, ShieldCheck, User, ChevronLeft, ChevronRight,
+  FileText, Car,
 } from 'lucide-react';
 import Layout     from '../components/layout/Layout';
 import PageHeader from '../components/ui/PageHeader';
-import TabBar     from '../components/ui/TabBar';
-import StatCard   from '../components/ui/StatCard';
 import {
   getTransportSummary, getStudentsWithoutTransport,
   getBuses, createBus, updateBus, deleteBus,
+  getDrivers, createDriver, updateDriver, deleteDriver,
   getRoutes, createRoute, updateRoute, deleteRoute,
   getStops, addStop, deleteStop,
-  getAssignments, createAssignment, updateAssignment, deleteAssignment,
+  getAssignments, createAssignment, deleteAssignment,
+  transferStudent, downloadTransportSlip,
 } from '../api/transport';
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-const BUS_STATUS_STYLES = {
+// ─── Palette helpers ──────────────────────────────────────────────────────────
+const STATUS_BUS = {
   active:      'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
   inactive:    'bg-slate-100   text-slate-600   dark:bg-slate-700      dark:text-slate-400',
   maintenance: 'bg-amber-100   text-amber-700   dark:bg-amber-900/30   dark:text-amber-400',
 };
-const BUS_STATUS_ICONS = { active: CheckCircle2, inactive: AlertCircle, maintenance: Wrench };
-
-const ASSIGN_STATUS_STYLES = {
-  active:    'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-  inactive:  'bg-slate-100   text-slate-600   dark:bg-slate-700      dark:text-slate-400',
-  suspended: 'bg-red-100     text-red-700     dark:bg-red-900/30     dark:text-red-400',
+const STATUS_ASSIGN = {
+  active:    'bg-emerald-100 text-emerald-700',
+  inactive:  'bg-slate-100   text-slate-600',
+  suspended: 'bg-red-100     text-red-700',
 };
+const VEHICLE_TYPES = ['bus','van','coaster','mini_bus','car'];
+const DRIVER_STATUS = ['active','inactive','suspended'];
 
-const TRANSPORT_TABS = [
-  { id: 'overview',     label: 'Overview',     icon: BarChart3  },
-  { id: 'buses',        label: 'Buses',        icon: Bus        },
-  { id: 'routes',       label: 'Routes',       icon: Route      },
-  { id: 'assignments',  label: 'Assignments',  icon: UserCheck  },
+const TABS = [
+  { id: 'overview',    label: 'Overview',     icon: BarChart3  },
+  { id: 'vehicles',    label: 'Vehicles',     icon: Bus        },
+  { id: 'drivers',     label: 'Drivers',      icon: User       },
+  { id: 'routes',      label: 'Routes',       icon: Route      },
+  { id: 'assignments', label: 'Assignments',  icon: UserCheck  },
 ];
 
-// ── Small shared components ───────────────────────────────────────────────────
-
-
-function OccupancyBar({ bus_number, driver_name, route_name, assigned_students, capacity, occupancy_pct, bus_status }) {
-  const pct   = Number(occupancy_pct) || 0;
-  const color = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : '#10b981';
-  const Icon  = BUS_STATUS_ICONS[bus_status] || CheckCircle2;
+// ─── Shared micro-components ─────────────────────────────────────────────────
+function Badge({ children, className = '' }) {
   return (
-    <div className="flex items-center gap-3">
-      <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${BUS_STATUS_STYLES[bus_status]}`}>
-        <Icon size={13} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex justify-between items-center mb-1">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="font-semibold text-sm text-slate-700 dark:text-slate-300">{bus_number}</span>
-            {route_name && <span className="text-xs text-slate-400 truncate hidden sm:inline">{route_name}</span>}
-          </div>
-          <span className="text-xs font-bold text-slate-600 dark:text-slate-300 flex-shrink-0 ml-2">
-            {assigned_students}/{capacity}
-          </span>
-        </div>
-        <div className="h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-          <div className="h-full rounded-full transition-all duration-700"
-            style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: color }} />
-        </div>
-        <div className="flex justify-between mt-0.5">
-          {driver_name && <span className="text-[11px] text-slate-400">{driver_name}</span>}
-          <span className="text-[11px] text-slate-400 ml-auto">{pct}% full</span>
-        </div>
-      </div>
-    </div>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${className}`}>
+      {children}
+    </span>
   );
 }
 
-function SelectField({ label, value, onChange, children, required }) {
-  return (
+function Field({ label, value, onChange, type = 'text', placeholder = '', required, options, rows }) {
+  const cls = 'w-full px-3 py-2.5 border border-slate-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-800 dark:text-white text-sm placeholder-slate-400 focus:ring-2 focus:ring-indigo-400 focus:border-transparent';
+  const lbl = (
+    <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wide">
+      {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+    </label>
+  );
+  if (options) return (
     <div>
-      {label && <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>}
+      {lbl}
       <div className="relative">
-        <select value={value} onChange={onChange} required={required}
-          className="w-full appearance-none pl-3 pr-8 py-2.5 border border-slate-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-800 dark:text-white text-sm focus:ring-2 focus:ring-sky-500 focus:border-transparent">
-          {children}
+        <select value={value} onChange={onChange} required={required} className={cls + ' appearance-none pr-8'}>
+          {options.map(o => (
+            <option key={o.value ?? o} value={o.value ?? o}>{o.label ?? o}</option>
+          ))}
         </select>
         <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
       </div>
     </div>
   );
-}
-
-function InputField({ label, type = 'text', value, onChange, placeholder, required, min, max }) {
+  if (rows) return (
+    <div>
+      {lbl}
+      <textarea value={value} onChange={onChange} rows={rows} placeholder={placeholder}
+        className={cls + ' resize-none'} />
+    </div>
+  );
   return (
     <div>
-      {label && <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>}
-      <input type={type} value={value} onChange={onChange} placeholder={placeholder} required={required} min={min} max={max}
-        className="w-full px-3 py-2.5 border border-slate-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-800 dark:text-white text-sm placeholder-slate-400 focus:ring-2 focus:ring-sky-500 focus:border-transparent" />
+      {lbl}
+      <input type={type} value={value} onChange={onChange} placeholder={placeholder} required={required}
+        className={cls} />
     </div>
   );
 }
 
-function ModalShell({ title, onClose, children }) {
+function Modal({ title, onClose, children, size = 'lg' }) {
+  const maxW = size === 'xl' ? 'max-w-2xl' : size === 'sm' ? 'max-w-sm' : 'max-w-lg';
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">
-          <h2 className="text-lg font-bold text-slate-800 dark:text-white">{title}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400"><X size={18} /></button>
+      <div className={`bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full ${maxW} max-h-[92vh] overflow-y-auto`}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+          <h2 className="text-base font-bold text-slate-800 dark:text-white">{title}</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400">
+            <X size={16} />
+          </button>
         </div>
         {children}
       </div>
@@ -123,9 +114,9 @@ function ConfirmDelete({ title, detail, onConfirm, onClose }) {
           </div>
           <h3 className="font-bold text-slate-800 dark:text-white">{title}</h3>
         </div>
-        <p className="text-sm text-slate-600 dark:text-slate-400 mb-5">{detail}</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">{detail}</p>
         <div className="flex gap-3">
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-sm font-medium text-slate-600 dark:text-slate-300">Cancel</button>
+          <button onClick={onClose}   className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-sm font-medium text-slate-600 dark:text-slate-300">Cancel</button>
           <button onClick={onConfirm} className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700">Delete</button>
         </div>
       </div>
@@ -133,856 +124,998 @@ function ConfirmDelete({ title, detail, onConfirm, onClose }) {
   );
 }
 
-// ── BUS MODAL ────────────────────────────────────────────────────────────────
-function BusModal({ bus, onSave, onClose }) {
+function OccupancyBar({ bus_number, driver_name, route_name, assigned_students, capacity, occupancy_pct, bus_status }) {
+  const pct   = Number(occupancy_pct) || 0;
+  const color = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : '#10b981';
+  return (
+    <div className="flex items-center gap-3">
+      <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${STATUS_BUS[bus_status]}`}>
+        <Bus size={13} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex justify-between items-center mb-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-semibold text-sm text-slate-700 dark:text-slate-300">{bus_number}</span>
+            {route_name && <span className="text-xs text-slate-400 truncate hidden sm:inline">{route_name}</span>}
+          </div>
+          <span className="text-xs font-bold text-slate-600 dark:text-slate-300 shrink-0 ml-2">
+            {assigned_students}/{capacity}
+          </span>
+        </div>
+        <div className="h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+          <div className="h-full rounded-full transition-all duration-700"
+            style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: color }} />
+        </div>
+        {driver_name && <p className="text-[11px] text-slate-400 mt-0.5">{driver_name} · {pct}% full</p>}
+      </div>
+    </div>
+  );
+}
+
+// ─── Vehicle Modal ────────────────────────────────────────────────────────────
+function VehicleModal({ bus, drivers, onSave, onClose }) {
   const isEdit = Boolean(bus?.id);
   const [form, setForm] = useState({
     bus_number:       bus?.bus_number       ?? '',
     vehicle_number:   bus?.vehicle_number   ?? '',
     capacity:         bus?.capacity         ?? '',
-    make_model:       bus?.make_model        ?? '',
+    make_model:       bus?.make_model       ?? '',
     manufacture_year: bus?.manufacture_year ?? '',
-    driver_name:      bus?.driver_name      ?? '',
-    driver_phone:     bus?.driver_phone     ?? '',
-    driver_license:   bus?.driver_license   ?? '',
+    vehicle_type:     bus?.vehicle_type     ?? 'bus',
+    driver_id:        bus?.driver_id        ?? '',
     status:           bus?.status           ?? 'active',
     notes:            bus?.notes            ?? '',
   });
   const set = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async e => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await onSave(form);
+    } finally { setSaving(false); }
+  };
+
+  const driverOptions = [
+    { value: '', label: '— No driver assigned —' },
+    ...drivers.map(d => ({ value: d.id, label: `${d.full_name} (${d.phone})` })),
+  ];
 
   return (
-    <ModalShell title={isEdit ? 'Edit Bus' : 'Add New Bus'} onClose={onClose}>
-      <form onSubmit={e => { e.preventDefault(); onSave(form); }} className="p-6 space-y-4">
+    <Modal title={isEdit ? 'Edit Vehicle' : 'Add Vehicle'} onClose={onClose}>
+      <form onSubmit={handleSubmit} className="p-6 space-y-4">
         <div className="grid grid-cols-2 gap-3">
-          <InputField label="Bus Number" value={form.bus_number} onChange={set('bus_number')} placeholder="Bus-01" required />
-          <InputField label="Vehicle Reg. No." value={form.vehicle_number} onChange={set('vehicle_number')} placeholder="LEA-1234" required />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <InputField label="Seating Capacity" type="number" value={form.capacity} onChange={set('capacity')} placeholder="35" required min="1" />
-          <SelectField label="Status" value={form.status} onChange={set('status')}>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="maintenance">Maintenance</option>
-          </SelectField>
+          <Field label="Vehicle No." value={form.bus_number} onChange={set('bus_number')} placeholder="Bus-01" required />
+          <Field label="Reg. Plate" value={form.vehicle_number} onChange={set('vehicle_number')} placeholder="LEA-1234" required />
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <InputField label="Make / Model" value={form.make_model} onChange={set('make_model')} placeholder="Toyota Coaster" />
-          <InputField label="Year" type="number" value={form.manufacture_year} onChange={set('manufacture_year')} placeholder="2020" min="1980" max="2100" />
+          <Field label="Type" value={form.vehicle_type} onChange={set('vehicle_type')} options={VEHICLE_TYPES.map(v => ({ value: v, label: v.replace('_',' ').replace(/\b\w/g, c => c.toUpperCase()) }))} />
+          <Field label="Capacity" type="number" value={form.capacity} onChange={set('capacity')} placeholder="35" required />
         </div>
-        <div className="border-t border-slate-100 dark:border-slate-700 pt-4">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Driver Info</p>
-          <div className="grid grid-cols-2 gap-3">
-            <InputField label="Driver Name" value={form.driver_name} onChange={set('driver_name')} placeholder="Muhammad Arif" />
-            <InputField label="Driver Phone" value={form.driver_phone} onChange={set('driver_phone')} placeholder="0300-0000000" />
-          </div>
-          <div className="mt-3">
-            <InputField label="License Number" value={form.driver_license} onChange={set('driver_license')} placeholder="Optional" />
-          </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Make / Model" value={form.make_model} onChange={set('make_model')} placeholder="Toyota Coaster" />
+          <Field label="Year" type="number" value={form.manufacture_year} onChange={set('manufacture_year')} placeholder="2020" />
         </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Notes</label>
-          <textarea value={form.notes} onChange={set('notes')} rows={2}
-            className="w-full px-3 py-2.5 border border-slate-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-800 dark:text-white text-sm placeholder-slate-400 focus:ring-2 focus:ring-sky-500 resize-none"
-            placeholder="Optional notes…" />
+        <Field label="Assign Driver" value={form.driver_id} onChange={set('driver_id')} options={driverOptions} />
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Status" value={form.status} onChange={set('status')} options={['active','inactive','maintenance'].map(v => ({ value: v, label: v.charAt(0).toUpperCase() + v.slice(1) }))} />
         </div>
+        <Field label="Notes" value={form.notes} onChange={set('notes')} rows={2} placeholder="Optional…" />
         <div className="flex gap-3 pt-2">
           <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-sm font-medium text-slate-600 dark:text-slate-300">Cancel</button>
-          <button type="submit" className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow hover:opacity-90">
-            {isEdit ? 'Save Changes' : 'Add Bus'}
+          <button type="submit" disabled={saving} className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold disabled:opacity-50">
+            {saving ? <RefreshCw size={14} className="animate-spin mx-auto" /> : (isEdit ? 'Save Changes' : 'Add Vehicle')}
           </button>
         </div>
       </form>
-    </ModalShell>
+    </Modal>
   );
 }
 
-// ── ROUTE MODAL ──────────────────────────────────────────────────────────────
+// ─── Driver Modal ─────────────────────────────────────────────────────────────
+function DriverModal({ driver, onSave, onClose }) {
+  const isEdit = Boolean(driver?.id);
+  const [form, setForm] = useState({
+    full_name:       driver?.full_name       ?? '',
+    cnic:            driver?.cnic            ?? '',
+    license_number:  driver?.license_number  ?? '',
+    license_expiry:  driver?.license_expiry  ? driver.license_expiry.slice(0, 10) : '',
+    phone:           driver?.phone           ?? '',
+    emergency_phone: driver?.emergency_phone ?? '',
+    address:         driver?.address         ?? '',
+    date_of_birth:   driver?.date_of_birth   ? driver.date_of_birth.slice(0, 10) : '',
+    status:          driver?.status          ?? 'active',
+    notes:           driver?.notes           ?? '',
+  });
+  const set = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
+  const [saving, setSaving]     = useState(false);
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(driver?.photo_url ?? null);
+  const fileRef = useRef();
+
+  const handlePhotoChange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!['image/jpeg','image/png','image/webp'].includes(file.type)) {
+      toast.error('Only JPG, PNG or WebP images allowed'); return;
+    }
+    if (file.size > 3 * 1024 * 1024) { toast.error('Image must be under 3 MB'); return; }
+    setPhotoFile(file);
+    setPhotoPreview(URL.createObjectURL(file));
+  };
+
+  const handleSubmit = async e => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      // Build FormData so photo is included in the multipart request
+      const fd = new FormData();
+      Object.entries(form).forEach(([k, v]) => { if (v !== '') fd.append(k, v); });
+      if (photoFile) fd.append('photo', photoFile);
+      await onSave(fd);
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <Modal title={isEdit ? 'Edit Driver' : 'Add Driver'} onClose={onClose} size="xl">
+      <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        {/* Photo */}
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 rounded-xl bg-slate-100 dark:bg-slate-700 overflow-hidden shrink-0 flex items-center justify-center">
+            {photoPreview
+              ? <img src={photoPreview} alt="driver" className="w-full h-full object-cover" />
+              : <User size={24} className="text-slate-400" />}
+          </div>
+          <div>
+            <button type="button" onClick={() => fileRef.current?.click()}
+              className="px-3 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300">
+              {photoPreview ? 'Change Photo' : 'Upload Photo'}
+            </button>
+            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp"
+              onChange={handlePhotoChange} className="hidden" />
+            <p className="text-xs text-slate-400 mt-1">JPG, PNG, WebP · max 3 MB</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2">
+            <Field label="Full Name" value={form.full_name} onChange={set('full_name')} placeholder="Muhammad Arif" required />
+          </div>
+          <Field label="Phone" value={form.phone} onChange={set('phone')} placeholder="0300-1234567" required />
+          <Field label="Emergency Phone" value={form.emergency_phone} onChange={set('emergency_phone')} placeholder="0300-0000000" />
+        </div>
+
+        <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Identity Documents</p>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="CNIC" value={form.cnic} onChange={set('cnic')} placeholder="35202-1234567-1" />
+            <Field label="Date of Birth" type="date" value={form.date_of_birth} onChange={set('date_of_birth')} />
+            <Field label="Driving License No." value={form.license_number} onChange={set('license_number')} placeholder="LHR-1234567" />
+            <Field label="License Expiry" type="date" value={form.license_expiry} onChange={set('license_expiry')} />
+          </div>
+        </div>
+
+        <Field label="Address" value={form.address} onChange={set('address')} rows={2} placeholder="Full residential address…" />
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Status" value={form.status} onChange={set('status')} options={DRIVER_STATUS.map(v => ({ value: v, label: v.charAt(0).toUpperCase() + v.slice(1) }))} />
+        </div>
+        <Field label="Notes" value={form.notes} onChange={set('notes')} rows={2} placeholder="Optional…" />
+
+        <div className="flex gap-3 pt-2">
+          <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-sm font-medium text-slate-600 dark:text-slate-300">Cancel</button>
+          <button type="submit" disabled={saving} className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold disabled:opacity-50">
+            {saving ? <RefreshCw size={14} className="animate-spin mx-auto" /> : (isEdit ? 'Save Changes' : 'Add Driver')}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// ─── Assignment Modal ─────────────────────────────────────────────────────────
+function AssignModal({ buses, routes, unassigned, onSave, onClose, academicYear }) {
+  const [form, setForm] = useState({
+    student_id: '', route_id: '', bus_id: '', stop_id: '',
+    transport_type: 'both', monthly_fee: '', academic_year: academicYear || '2024-25',
+  });
+  const [stops, setStops] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const set = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
+
+  useEffect(() => {
+    if (!form.route_id) { setStops([]); return; }
+    getStops(form.route_id)
+      .then(r => { const d = r.data; setStops(Array.isArray(d) ? d : (d?.data ?? [])); })
+      .catch(() => {});
+  }, [form.route_id]);
+
+  const handleSubmit = async e => {
+    e.preventDefault();
+    setSaving(true);
+    try { await onSave(form); } finally { setSaving(false); }
+  };
+
+  const activeBuses = buses.filter(b => b.status === 'active');
+
+  return (
+    <Modal title="Assign Student to Transport" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <Field label="Student" value={form.student_id} onChange={set('student_id')} required
+          options={[
+            { value: '', label: '— Select student —' },
+            ...unassigned.map(s => ({ value: s.id, label: `${s.student_name} (${s.roll_number || 'No roll'}) — ${s.class_section || ''}` })),
+          ]}
+        />
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Route" value={form.route_id} onChange={set('route_id')} required
+            options={[
+              { value: '', label: '— Select route —' },
+              ...routes.map(r => ({ value: r.id, label: r.route_name })),
+            ]}
+          />
+          <Field label="Vehicle" value={form.bus_id} onChange={set('bus_id')} required
+            options={[
+              { value: '', label: '— Select vehicle —' },
+              ...activeBuses.map(b => ({ value: b.id, label: `${b.bus_number} (${b.assigned_students}/${b.capacity} seats)` })),
+            ]}
+          />
+        </div>
+        {stops.length > 0 && (
+          <Field label="Pickup / Drop Stop" value={form.stop_id} onChange={set('stop_id')}
+            options={[
+              { value: '', label: '— Select stop (optional) —' },
+              ...stops.map(s => ({ value: s.id, label: `${s.stop_name}${s.pickup_time ? ` (${s.pickup_time})` : ''}` })),
+            ]}
+          />
+        )}
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Transport Type" value={form.transport_type} onChange={set('transport_type')}
+            options={[
+              { value: 'both',    label: 'Both (Pickup & Drop)' },
+              { value: 'pickup',  label: 'Pickup Only' },
+              { value: 'dropoff', label: 'Drop Only' },
+            ]}
+          />
+          <Field label="Monthly Fee (PKR)" type="number" value={form.monthly_fee} onChange={set('monthly_fee')} placeholder="1500" />
+        </div>
+        <div className="flex gap-3 pt-2">
+          <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-sm font-medium text-slate-600 dark:text-slate-300">Cancel</button>
+          <button type="submit" disabled={saving} className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold disabled:opacity-50">
+            {saving ? <RefreshCw size={14} className="animate-spin mx-auto" /> : 'Assign'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// ─── Transfer Modal ───────────────────────────────────────────────────────────
+function TransferModal({ assignment, buses, routes, onSave, onClose }) {
+  const [form, setForm] = useState({
+    to_bus_id: '', to_route_id: '', to_stop_id: '', transfer_reason: '',
+  });
+  const [stops, setStops] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const set = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
+
+  useEffect(() => {
+    if (!form.to_route_id) { setStops([]); return; }
+    getStops(form.to_route_id).then(r => { const d = r.data; setStops(Array.isArray(d) ? d : (d?.data ?? [])); }).catch(() => {});
+  }, [form.to_route_id]);
+
+  const handleSubmit = async e => {
+    e.preventDefault();
+    if (!form.to_bus_id || !form.to_route_id) {
+      toast.error('Select both a new vehicle and route');
+      return;
+    }
+    setSaving(true);
+    try { await onSave(form); } finally { setSaving(false); }
+  };
+
+  const activeBuses = buses.filter(b => b.status === 'active' && String(b.id) !== String(assignment.bus_id));
+
+  return (
+    <Modal title="Transfer Student" onClose={onClose}>
+      <div className="px-6 pt-4 pb-2">
+        <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-sm">
+          <p className="font-semibold text-amber-800 dark:text-amber-300">{assignment.student_name}</p>
+          <p className="text-amber-600 dark:text-amber-400 text-xs mt-0.5">
+            Currently on <strong>{assignment.bus_number}</strong> · {assignment.route_name}
+          </p>
+        </div>
+      </div>
+      <form onSubmit={handleSubmit} className="p-6 pt-3 space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="New Vehicle" value={form.to_bus_id} onChange={set('to_bus_id')} required
+            options={[
+              { value: '', label: '— Select vehicle —' },
+              ...activeBuses.map(b => ({ value: b.id, label: `${b.bus_number} (${b.assigned_students}/${b.capacity})` })),
+            ]}
+          />
+          <Field label="New Route" value={form.to_route_id} onChange={set('to_route_id')} required
+            options={[
+              { value: '', label: '— Select route —' },
+              ...routes.map(r => ({ value: r.id, label: r.route_name })),
+            ]}
+          />
+        </div>
+        {stops.length > 0 && (
+          <Field label="New Stop" value={form.to_stop_id} onChange={set('to_stop_id')}
+            options={[
+              { value: '', label: '— Select stop —' },
+              ...stops.map(s => ({ value: s.id, label: s.stop_name })),
+            ]}
+          />
+        )}
+        <Field label="Reason for Transfer" value={form.transfer_reason} onChange={set('transfer_reason')}
+          rows={2} placeholder="e.g. Changed home address, route conflict…" />
+        <div className="flex gap-3 pt-2">
+          <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-sm font-medium text-slate-600 dark:text-slate-300">Cancel</button>
+          <button type="submit" disabled={saving} className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold disabled:opacity-50">
+            {saving ? <RefreshCw size={14} className="animate-spin mx-auto" /> : 'Transfer'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// ─── Route Modal ──────────────────────────────────────────────────────────────
 function RouteModal({ route, onSave, onClose }) {
   const isEdit = Boolean(route?.id);
   const [form, setForm] = useState({
     route_name:     route?.route_name     ?? '',
-    description:    route?.description    ?? '',
     start_point:    route?.start_point    ?? '',
     end_point:      route?.end_point      ?? '',
+    description:    route?.description    ?? '',
     estimated_time: route?.estimated_time ?? '',
     distance_km:    route?.distance_km    ?? '',
     is_active:      route?.is_active      ?? true,
   });
   const set = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async e => {
+    e.preventDefault();
+    setSaving(true);
+    try { await onSave(form); } finally { setSaving(false); }
+  };
 
   return (
-    <ModalShell title={isEdit ? 'Edit Route' : 'Add New Route'} onClose={onClose}>
-      <form onSubmit={e => { e.preventDefault(); onSave(form); }} className="p-6 space-y-4">
-        <InputField label="Route Name" value={form.route_name} onChange={set('route_name')} placeholder="Route 1 – City Center" required />
+    <Modal title={isEdit ? 'Edit Route' : 'Add Route'} onClose={onClose}>
+      <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <Field label="Route Name" value={form.route_name} onChange={set('route_name')} placeholder="City Centre → School" required />
         <div className="grid grid-cols-2 gap-3">
-          <InputField label="Start Point" value={form.start_point} onChange={set('start_point')} placeholder="School Main Gate" required />
-          <InputField label="End Point" value={form.end_point} onChange={set('end_point')} placeholder="City Center Chowk" required />
+          <Field label="Start Point" value={form.start_point} onChange={set('start_point')} placeholder="Main Chowk" required />
+          <Field label="End Point" value={form.end_point} onChange={set('end_point')} placeholder="School Gate" required />
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <InputField label="Est. Time (min)" type="number" value={form.estimated_time} onChange={set('estimated_time')} placeholder="25" min="1" />
-          <InputField label="Distance (km)" type="number" value={form.distance_km} onChange={set('distance_km')} placeholder="8.5" min="0" />
+          <Field label="Distance (km)" type="number" value={form.distance_km} onChange={set('distance_km')} placeholder="12.5" />
+          <Field label="Est. Time (min)" type="number" value={form.estimated_time} onChange={set('estimated_time')} placeholder="30" />
         </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Description</label>
-          <textarea value={form.description} onChange={set('description')} rows={2}
-            className="w-full px-3 py-2.5 border border-slate-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-800 dark:text-white text-sm placeholder-slate-400 focus:ring-2 focus:ring-sky-500 resize-none"
-            placeholder="Optional description…" />
-        </div>
+        <Field label="Description" value={form.description} onChange={set('description')} rows={2} placeholder="Via Gulberg, Model Town…" />
         {isEdit && (
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={form.is_active} onChange={e => setForm(p => ({ ...p, is_active: e.target.checked }))} className="w-4 h-4 rounded text-sky-600" />
-            <span className="text-sm text-slate-700 dark:text-slate-300">Active</span>
-          </label>
+          <Field label="Status" value={form.is_active ? 'true' : 'false'}
+            onChange={e => setForm(p => ({ ...p, is_active: e.target.value === 'true' }))}
+            options={[{ value: 'true', label: 'Active' }, { value: 'false', label: 'Inactive' }]} />
         )}
         <div className="flex gap-3 pt-2">
           <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-sm font-medium text-slate-600 dark:text-slate-300">Cancel</button>
-          <button type="submit" className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow hover:opacity-90">
-            {isEdit ? 'Save Changes' : 'Add Route'}
+          <button type="submit" disabled={saving} className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold disabled:opacity-50">
+            {saving ? <RefreshCw size={14} className="animate-spin mx-auto" /> : (isEdit ? 'Save Changes' : 'Add Route')}
           </button>
         </div>
       </form>
-    </ModalShell>
+    </Modal>
   );
 }
 
-// ── STOP MODAL ───────────────────────────────────────────────────────────────
-function StopModal({ routeId, stop, onSave, onClose }) {
-  const [form, setForm] = useState({
-    stop_name:    stop?.stop_name    ?? '',
-    stop_order:   stop?.stop_order   ?? '',
-    pickup_time:  stop?.pickup_time  ?? '',
-    dropoff_time: stop?.dropoff_time ?? '',
-    landmark:     stop?.landmark     ?? '',
-  });
-  const set = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
-
-  return (
-    <ModalShell title={stop?.id ? 'Edit Stop' : 'Add Stop'} onClose={onClose}>
-      <form onSubmit={e => { e.preventDefault(); onSave(routeId, form); }} className="p-6 space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <InputField label="Stop Name" value={form.stop_name} onChange={set('stop_name')} placeholder="City Center Chowk" required />
-          <InputField label="Order" type="number" value={form.stop_order} onChange={set('stop_order')} placeholder="1" required min="1" />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <InputField label="Pickup Time" type="time" value={form.pickup_time} onChange={set('pickup_time')} />
-          <InputField label="Dropoff Time" type="time" value={form.dropoff_time} onChange={set('dropoff_time')} />
-        </div>
-        <InputField label="Landmark / Description" value={form.landmark} onChange={set('landmark')} placeholder="Near MCB Bank" />
-        <div className="flex gap-3 pt-2">
-          <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-sm font-medium text-slate-600 dark:text-slate-300">Cancel</button>
-          <button type="submit" className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow hover:opacity-90">
-            {stop?.id ? 'Save' : 'Add Stop'}
-          </button>
-        </div>
-      </form>
-    </ModalShell>
-  );
-}
-
-// ── ASSIGNMENT MODAL ─────────────────────────────────────────────────────────
-function AssignModal({ assignment, buses, routes, onSave, onClose }) {
-  const isEdit = Boolean(assignment?.id);
-  const [form, setForm] = useState({
-    student_id:      '',
-    route_id:        assignment?.route_id   ?? '',
-    stop_id:         assignment?.stop_id    ?? '',
-    bus_id:          assignment?.bus_id     ?? '',
-    academic_year:   '2024-25',
-    transport_type:  assignment?.transport_type ?? 'both',
-    monthly_fee:     assignment?.monthly_fee    ?? '1500',
-  });
-  const set = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
-
-  const [stops, setStops]       = useState([]);
-  const [students, setStudents] = useState([]);
-  const [stuSearch, setStuSearch] = useState('');
-
-  useEffect(() => {
-    if (form.route_id) {
-      getStops(form.route_id).then(r => setStops(r.data || [])).catch(() => {});
-    } else {
-      setStops([]);
-    }
-  }, [form.route_id]);
-
-  useEffect(() => {
-    if (!isEdit) {
-      getStudentsWithoutTransport({ search: stuSearch }).then(r => setStudents(r.data || [])).catch(() => {});
-    }
-  }, [stuSearch, isEdit]);
-
-  return (
-    <ModalShell title={isEdit ? 'Edit Assignment' : 'Assign Student to Transport'} onClose={onClose}>
-      <form onSubmit={e => { e.preventDefault(); onSave(form); }} className="p-6 space-y-4">
-        {!isEdit && (
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Student <span className="text-red-500">*</span></label>
-            <div className="relative mb-2">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input value={stuSearch} onChange={e => setStuSearch(e.target.value)} placeholder="Search student by name or roll no…"
-                className="w-full pl-9 pr-3 py-2 border border-slate-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-sky-500" />
-            </div>
-            <div className="relative">
-              <select value={form.student_id} onChange={set('student_id')} required
-                className="w-full appearance-none pl-3 pr-8 py-2.5 border border-slate-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-800 dark:text-white text-sm focus:ring-2 focus:ring-sky-500">
-                <option value="">Select student…</option>
-                {students.map(s => (
-                  <option key={s.id} value={s.id}>{s.student_name} — {s.roll_number} ({s.class_section})</option>
-                ))}
-              </select>
-              <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-            </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-3">
-          <SelectField label="Route" value={form.route_id} onChange={set('route_id')} required>
-            <option value="">Select route…</option>
-            {routes.map(r => <option key={r.id} value={r.id}>{r.route_name}</option>)}
-          </SelectField>
-          <SelectField label="Bus" value={form.bus_id} onChange={set('bus_id')} required>
-            <option value="">Select bus…</option>
-            {buses.filter(b => b.status === 'active').map(b => (
-              <option key={b.id} value={b.id}>{b.bus_number} (cap: {b.capacity})</option>
-            ))}
-          </SelectField>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <SelectField label="Pickup Stop" value={form.stop_id} onChange={set('stop_id')}>
-            <option value="">No specific stop</option>
-            {stops.map(s => <option key={s.id} value={s.id}>{s.stop_name}</option>)}
-          </SelectField>
-          <SelectField label="Transport Type" value={form.transport_type} onChange={set('transport_type')}>
-            <option value="both">Both Ways</option>
-            <option value="pickup">Pickup Only</option>
-            <option value="dropoff">Dropoff Only</option>
-          </SelectField>
-        </div>
-
-        <InputField label="Monthly Fee (PKR)" type="number" value={form.monthly_fee} onChange={set('monthly_fee')} placeholder="1500" min="0" />
-
-        <div className="flex gap-3 pt-2">
-          <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-sm font-medium text-slate-600 dark:text-slate-300">Cancel</button>
-          <button type="submit" className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow hover:opacity-90">
-            {isEdit ? 'Update' : 'Assign'}
-          </button>
-        </div>
-      </form>
-    </ModalShell>
-  );
-}
-
-// ── ROUTE DETAIL PANEL (stops list) ─────────────────────────────────────────
-function RouteDetailPanel({ route, buses, onClose, onRefresh }) {
-  const [stops, setStops]       = useState([]);
-  const [loadingStops, setLoadingStops] = useState(false);
-  const [stopModal, setStopModal]  = useState(false);
-  const [deleteStop_, setDeleteStop_] = useState(null);
-
-  const load = useCallback(async () => {
-    setLoadingStops(true);
-    try {
-      const r = await getStops(route.id);
-      setStops(r.data || []);
-    } catch { /* ignore */ }
-    finally { setLoadingStops(false); }
-  }, [route.id]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const handleAddStop = async (routeId, form) => {
-    try {
-      await addStop(routeId, form);
-      toast.success('Stop added');
-      setStopModal(false);
-      load();
-    } catch (err) { toast.error(err.response?.data?.message || 'Failed to add stop'); }
-  };
-
-  const handleDeleteStop = async () => {
-    try {
-      await deleteStop(deleteStop_.id);
-      toast.success('Stop removed');
-      setDeleteStop_(null);
-      load();
-    } catch { toast.error('Failed to delete stop'); }
-  };
-
-  const assignedBus = buses.find(b => b.id === route.bus_id);
-
-  return (
-    <div className="fixed inset-0 z-40 flex justify-end">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-white dark:bg-slate-800 h-full overflow-y-auto shadow-2xl flex flex-col">
-        {/* Header */}
-        <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h3 className="font-bold text-slate-800 dark:text-white text-lg">{route.route_name}</h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1.5">
-                <Navigation size={12} /> {route.start_point} → {route.end_point}
-              </p>
-            </div>
-            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 flex-shrink-0">
-              <X size={18} />
-            </button>
-          </div>
-          <div className="flex gap-4 mt-3 text-xs text-slate-500 dark:text-slate-400">
-            {route.estimated_time && (
-              <span className="flex items-center gap-1"><Clock size={11} />{route.estimated_time} min</span>
-            )}
-            <span className="flex items-center gap-1"><Users size={11} />{route.assigned_students || 0} students</span>
-            {assignedBus && (
-              <span className="flex items-center gap-1"><Bus size={11} />{assignedBus.bus_number}</span>
-            )}
-          </div>
-        </div>
-
-        {/* Stops */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="flex items-center justify-between mb-4">
-            <p className="font-semibold text-slate-700 dark:text-slate-300 text-sm">Route Stops ({stops.length})</p>
-            <button onClick={() => setStopModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 text-white text-xs font-semibold hover:bg-sky-700">
-              <PlusCircle size={12} /> Add Stop
-            </button>
-          </div>
-
-          {loadingStops ? (
-            <div className="flex items-center gap-2 py-8 justify-center text-slate-400">
-              <RefreshCw size={16} className="animate-spin" /> Loading…
-            </div>
-          ) : stops.length === 0 ? (
-            <div className="text-center py-10 text-slate-400">
-              <MapPin size={32} className="mx-auto mb-2 opacity-30" />
-              <p className="text-sm">No stops defined yet</p>
-            </div>
-          ) : (
-            <div className="relative">
-              {/* Timeline line */}
-              <div className="absolute left-3.5 top-4 bottom-4 w-0.5 bg-slate-200 dark:bg-slate-600" />
-              <div className="space-y-1">
-                {stops.map((s, i) => (
-                  <div key={s.id} className="flex items-start gap-4 pl-8 relative py-2">
-                    {/* Dot */}
-                    <div className={`absolute left-1.5 top-3 w-4 h-4 rounded-full border-2 flex-shrink-0 z-10 ${
-                      i === 0 ? 'border-sky-500 bg-sky-500' :
-                      i === stops.length - 1 ? 'border-emerald-500 bg-emerald-500' :
-                      'border-slate-300 bg-white dark:bg-slate-800 dark:border-slate-500'
-                    }`} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <p className="font-medium text-sm text-slate-800 dark:text-white">{s.stop_name}</p>
-                          {s.landmark && <p className="text-xs text-slate-400">{s.landmark}</p>}
-                          <div className="flex gap-3 mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                            {s.pickup_time  && <span>↑ {s.pickup_time?.slice(0,5)}</span>}
-                            {s.dropoff_time && <span>↓ {s.dropoff_time?.slice(0,5)}</span>}
-                            {s.student_count > 0 && <span className="text-sky-600 font-medium">{s.student_count} student{s.student_count !== 1 ? 's' : ''}</span>}
-                          </div>
-                        </div>
-                        <button onClick={() => setDeleteStop_(s)}
-                          className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400 flex-shrink-0">
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {stopModal && (
-        <StopModal routeId={route.id} onSave={handleAddStop} onClose={() => setStopModal(false)} />
-      )}
-      {deleteStop_ && (
-        <ConfirmDelete
-          title="Remove Stop"
-          detail={`Remove stop "${deleteStop_.stop_name}"?`}
-          onConfirm={handleDeleteStop}
-          onClose={() => setDeleteStop_(null)}
-        />
-      )}
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
 //  MAIN PAGE
-// ═══════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
 export default function TransportPage() {
-  const [tab, setTab] = useState('overview');
+  const [tab,      setTab]      = useState('overview');
+  const [summary,  setSummary]  = useState(null);
+  const [buses,    setBuses]    = useState([]);
+  const [drivers,  setDrivers]  = useState([]);
+  const [routes,   setRoutes]   = useState([]);
+  const [assigns,  setAssigns]  = useState([]);
+  const [unassigned, setUnassigned] = useState([]);
 
-  const [summary,     setSummary]     = useState(null);
-  const [buses,       setBuses]       = useState([]);
-  const [routes,      setRoutes]      = useState([]);
-  const [assignments, setAssignments] = useState([]);
-  const [loading,     setLoading]     = useState(false);
-
-  // Filters
-  const [assignFilter, setAssignFilter] = useState({ route_id: '', bus_id: '', search: '' });
+  const [loading,  setLoading]  = useState(true);
+  const [search,   setSearch]   = useState('');
 
   // Modals
-  const [busModal,    setBusModal]    = useState(null);
-  const [routeModal,  setRouteModal]  = useState(null);
-  const [assignModal, setAssignModal] = useState(null);
-  const [deleteTarget, setDeleteTarget] = useState(null); // { type, item }
-  const [detailRoute, setDetailRoute]   = useState(null);
+  const [busModal,     setBusModal]     = useState(null); // null | 'new' | bus-obj
+  const [driverModal,  setDriverModal]  = useState(null);
+  const [routeModal,   setRouteModal]   = useState(null); // null | 'new' | route-obj
+  const [assignModal,  setAssignModal]  = useState(false);
+  const [transferModal,setTransferModal]= useState(null); // assignment obj
+  const [delConfirm,   setDelConfirm]   = useState(null); // { type, id, name }
+  const [pdfLoading,   setPdfLoading]   = useState(null); // assignment id
 
-  // ── Loaders ──────────────────────────────────────────────
-  const loadSummary = useCallback(async () => {
-    try {
-      const r = await getTransportSummary();
-      setSummary(r.data?.data ?? r.data);
-    } catch { /* silent */ }
-  }, []);
+  // Academic year — users can change this without reloading the whole page
+  const currentYear = new Date().getFullYear();
+  const YEAR_OPTIONS = [`${currentYear-1}-${String(currentYear).slice(2)}`, `${currentYear}-${String(currentYear+1).slice(2)}`];
+  const [academicYear, setAcademicYear] = useState('2024-25');
 
-  const loadBuses = useCallback(async () => {
-    try {
-      const r = await getBuses();
-      setBuses(r.data || []);
-    } catch { toast.error('Failed to load buses'); }
-  }, []);
-
-  const loadRoutes = useCallback(async () => {
-    try {
-      const r = await getRoutes();
-      setRoutes(r.data || []);
-    } catch { toast.error('Failed to load routes'); }
-  }, []);
-
-  const loadAssignments = useCallback(async () => {
+  // ── Load ──────────────────────────────────────────────────────────────────
+  const loadAll = useCallback(async () => {
     setLoading(true);
-    try {
-      const params = {
-        route_id: assignFilter.route_id || undefined,
-        bus_id:   assignFilter.bus_id   || undefined,
-        search:   assignFilter.search   || undefined,
-      };
-      Object.keys(params).forEach(k => params[k] === undefined && delete params[k]);
-      const r = await getAssignments(params);
-      setAssignments(r.data || []);
-    } catch { toast.error('Failed to load assignments'); }
-    finally { setLoading(false); }
-  }, [assignFilter]);
+    const [sumR, busR, drvR, rteR, asnR, unaR] = await Promise.allSettled([
+      getTransportSummary({ academic_year: academicYear }),
+      getBuses(),
+      getDrivers(),
+      getRoutes(),
+      getAssignments({ status: 'active', academic_year: academicYear }),
+      getStudentsWithoutTransport({ academic_year: academicYear }),
+    ]);
+    // Axios interceptor unwraps { success, data: [...] } → response.data IS the array.
+    // For non-array responses (summary object) it stays wrapped — check both patterns.
+    const val = r => {
+      if (r.status !== 'fulfilled') return null;
+      const d = r.value?.data;
+      return Array.isArray(d) ? d : (d?.data ?? null);
+    };
+    if (val(sumR) !== null) setSummary(val(sumR));
+    setBuses(val(busR) ?? []);
+    setDrivers(val(drvR) ?? []);
+    setRoutes(val(rteR) ?? []);
+    setAssigns(val(asnR) ?? []);
+    setUnassigned(val(unaR) ?? []);
+    const failed = [sumR,busR,drvR,rteR,asnR,unaR].filter(r => r.status === 'rejected');
+    if (failed.length) {
+      console.error('Transport load errors:', failed.map(r => r.reason?.response?.data?.message || r.reason?.message));
+      toast.error('Some transport data failed to load');
+    }
+    setLoading(false);
+  }, [academicYear]);
 
-  useEffect(() => { loadSummary(); loadBuses(); loadRoutes(); }, [loadSummary, loadBuses, loadRoutes]);
-  useEffect(() => { if (tab === 'assignments') loadAssignments(); }, [tab, loadAssignments]);
+  useEffect(() => { loadAll(); }, [loadAll]);
 
-  // ── Bus actions ──────────────────────────────────────────
-  const handleSaveBus = async (form) => {
+  // ── Vehicle CRUD ──────────────────────────────────────────────────────────
+  const handleSaveBus = async form => {
     try {
-      if (busModal?.id) { await updateBus(busModal.id, form); toast.success('Bus updated'); }
-      else              { await createBus(form);              toast.success('Bus added');   }
-      setBusModal(null); loadBuses(); loadSummary();
-    } catch (err) { toast.error(err.response?.data?.message || 'Failed to save bus'); }
+      if (busModal?.id) {
+        await updateBus(busModal.id, form);
+        toast.success('Vehicle updated');
+      } else {
+        await createBus(form);
+        toast.success('Vehicle added');
+      }
+      setBusModal(null);
+      loadAll();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Save failed');
+    }
   };
 
-  const handleDeleteBus = async () => {
+  const handleDeleteBus = async id => {
     try {
-      await deleteBus(deleteTarget.item.id);
-      toast.success('Bus deleted');
-      setDeleteTarget(null); loadBuses(); loadSummary();
-    } catch (err) { toast.error(err.response?.data?.message || 'Failed to delete bus'); }
+      await deleteBus(id);
+      toast.success('Vehicle deleted');
+      setDelConfirm(null);
+      loadAll();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Delete failed');
+    }
   };
 
-  // ── Route actions ────────────────────────────────────────
-  const handleSaveRoute = async (form) => {
+  // ── Driver CRUD ───────────────────────────────────────────────────────────
+  const handleSaveDriver = async formData => {
+    // formData is a FormData instance (supports photo upload)
     try {
-      if (routeModal?.id) { await updateRoute(routeModal.id, form); toast.success('Route updated'); }
-      else                { await createRoute(form);                 toast.success('Route created'); }
-      setRouteModal(null); loadRoutes(); loadSummary();
-    } catch (err) { toast.error(err.response?.data?.message || 'Failed to save route'); }
+      if (driverModal?.id) {
+        await updateDriver(driverModal.id, formData);
+        toast.success('Driver updated');
+      } else {
+        await createDriver(formData);
+        toast.success('Driver added');
+      }
+      setDriverModal(null);
+      loadAll();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Save failed');
+    }
   };
 
-  const handleDeleteRoute = async () => {
+  const handleDeleteDriver = async id => {
     try {
-      await deleteRoute(deleteTarget.item.id);
+      await deleteDriver(id);
+      toast.success('Driver deleted');
+      setDelConfirm(null);
+      loadAll();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Delete failed');
+    }
+  };
+
+  // ── Route CRUD ────────────────────────────────────────────────────────────
+  const handleSaveRoute = async form => {
+    try {
+      if (routeModal?.id) {
+        await updateRoute(routeModal.id, form);
+        toast.success('Route updated');
+      } else {
+        await createRoute(form);
+        toast.success('Route created');
+      }
+      setRouteModal(null);
+      loadAll();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Save failed');
+    }
+  };
+
+  const handleDeleteRoute = async id => {
+    try {
+      await deleteRoute(id);
       toast.success('Route deleted');
-      setDeleteTarget(null); loadRoutes(); loadSummary();
-    } catch (err) { toast.error(err.response?.data?.message || 'Failed to delete route'); }
+      setDelConfirm(null);
+      loadAll();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Delete failed');
+    }
   };
 
-  // ── Assignment actions ───────────────────────────────────
-  const handleSaveAssignment = async (form) => {
+  // ── Assignment CRUD ───────────────────────────────────────────────────────
+  const handleAssign = async form => {
     try {
-      if (assignModal?.id) { await updateAssignment(assignModal.id, form); toast.success('Assignment updated'); }
-      else                 { await createAssignment(form);                  toast.success('Student assigned');  }
-      setAssignModal(null); loadAssignments(); loadSummary();
-    } catch (err) { toast.error(err.response?.data?.message || 'Failed to save assignment'); }
+      await createAssignment(form);
+      toast.success('Student assigned');
+      setAssignModal(false);
+      loadAll();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Assignment failed');
+    }
   };
 
-  const handleDeleteAssignment = async () => {
+  const handleDelete = async () => {
+    const { type, id } = delConfirm;
+    if (type === 'bus')        { await handleDeleteBus(id); return; }
+    if (type === 'driver')     { await handleDeleteDriver(id); return; }
+    if (type === 'route')      { await handleDeleteRoute(id); return; }
+    if (type === 'assignment') {
+      try {
+        await deleteAssignment(id);
+        toast.success('Assignment removed');
+        setDelConfirm(null);
+        loadAll();
+      } catch (err) {
+        toast.error(err.response?.data?.message || 'Delete failed');
+      }
+    }
+  };
+
+  // ── Transfer ──────────────────────────────────────────────────────────────
+  const handleTransfer = async form => {
     try {
-      await deleteAssignment(deleteTarget.item.id);
-      toast.success('Assignment removed');
-      setDeleteTarget(null); loadAssignments(); loadSummary();
-    } catch { toast.error('Failed to remove assignment'); }
+      await transferStudent(transferModal.id, form);
+      toast.success('Student transferred');
+      setTransferModal(null);
+      loadAll();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Transfer failed');
+    }
   };
 
-  const handleDelete = () => {
-    if (!deleteTarget) return;
-    if (deleteTarget.type === 'bus')        handleDeleteBus();
-    else if (deleteTarget.type === 'route') handleDeleteRoute();
-    else                                    handleDeleteAssignment();
+  // ── PDF download ──────────────────────────────────────────────────────────
+  const handlePdf = async assignmentId => {
+    setPdfLoading(assignmentId);
+    try {
+      const res = await downloadTransportSlip(assignmentId);
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const a   = document.createElement('a');
+      a.href    = url;
+      a.download = `transport-slip-${assignmentId}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Failed to generate PDF');
+    } finally {
+      setPdfLoading(null);
+    }
   };
 
-  // ─────────────────────────────────────────────────────────────
+  // ── Search filter ─────────────────────────────────────────────────────────
+  const filtered = {
+    buses:   buses.filter(b   => !search || b.bus_number?.toLowerCase().includes(search.toLowerCase()) || (b.driver_full_name || b.driver_name || '').toLowerCase().includes(search.toLowerCase())),
+    drivers: drivers.filter(d => !search || d.full_name?.toLowerCase().includes(search.toLowerCase()) || d.phone?.includes(search)),
+    assigns: assigns.filter(a => !search || a.student_name?.toLowerCase().includes(search.toLowerCase()) || a.roll_number?.toLowerCase().includes(search.toLowerCase())),
+  };
+
+  if (loading) return (
+    <Layout>
+      <div className="flex items-center justify-center h-64">
+        <RefreshCw size={24} className="animate-spin text-indigo-500" />
+      </div>
+    </Layout>
+  );
+
   return (
     <Layout>
-      {/* Header */}
-      <div className="mb-6">
-        <PageHeader
-          icon={Bus}
-          title="Transport Management"
-          subtitle="Manage school buses, routes and student assignments"
-          actions={
-            <div className="flex gap-2 flex-wrap">
-              {tab === 'buses'       && <button onClick={() => setBusModal('new')}    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm transition-colors"><PlusCircle size={16} /> Add Bus</button>}
-              {tab === 'routes'      && <button onClick={() => setRouteModal('new')}  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm transition-colors"><PlusCircle size={16} /> Add Route</button>}
-              {tab === 'assignments' && <button onClick={() => setAssignModal('new')} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm transition-colors"><PlusCircle size={16} /> Assign Student</button>}
-            </div>
-          }
-        />
-        <div className="mt-5">
-          <TabBar tabs={TRANSPORT_TABS} active={tab} onChange={setTab} />
-        </div>
-      </div>
+      <div className="p-4 sm:p-6 space-y-5 max-w-7xl mx-auto">
 
-      {/* ══ OVERVIEW ═══════════════════════════════════════════════ */}
-      {tab === 'overview' && (
-        <div className="space-y-6">
-          {/* Stat cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard label="Total Buses"       value={summary?.buses?.total ?? 0}               sub={`${summary?.buses?.by_status?.active ?? 0} active`}           icon={Bus}       color="bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400" />
-            <StatCard label="Active Routes"     value={summary?.routes?.total ?? 0}              sub="operational routes"                                           icon={Route}     color="bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400" />
-            <StatCard label="Students Assigned" value={summary?.assignments?.active ?? 0}        sub="active this year"                                             icon={Users}     color="bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400" />
-            <StatCard label="In Maintenance"    value={summary?.buses?.by_status?.maintenance ?? 0} sub="buses under service"                                       icon={Wrench}    color="bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400" />
+        <PageHeader title="Transport Management" subtitle="Vehicles, drivers, routes & student assignments">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Academic year selector (shown when relevant) */}
+            {['assignments','overview'].includes(tab) && (
+              <select value={academicYear} onChange={e => setAcademicYear(e.target.value)}
+                className="px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-xl text-sm bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            )}
+            {tab === 'assignments' && (
+              <button onClick={() => setAssignModal(true)}
+                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700">
+                <PlusCircle size={15} /> Assign Student
+              </button>
+            )}
+            {tab === 'vehicles' && (
+              <button onClick={() => setBusModal('new')}
+                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700">
+                <PlusCircle size={15} /> Add Vehicle
+              </button>
+            )}
+            {tab === 'drivers' && (
+              <button onClick={() => setDriverModal('new')}
+                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700">
+                <PlusCircle size={15} /> Add Driver
+              </button>
+            )}
+            {tab === 'routes' && (
+              <button onClick={() => setRouteModal('new')}
+                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700">
+                <PlusCircle size={15} /> Add Route
+              </button>
+            )}
+            <button onClick={loadAll} className="p-2 rounded-xl border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700">
+              <RefreshCw size={15} className="text-slate-500" />
+            </button>
           </div>
+        </PageHeader>
 
-          {/* Bus occupancy */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
-            <h3 className="font-semibold text-slate-800 dark:text-white mb-5">Bus Occupancy</h3>
-            {(summary?.occupancy ?? []).length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-6">No bus data yet</p>
-            ) : (
-              <div className="space-y-5">
-                {(summary?.occupancy ?? []).map((b, i) => (
-                  <OccupancyBar key={i} {...b} />
-                ))}
-              </div>
+        {/* Tab bar */}
+        <div className="flex gap-1 border-b border-slate-200 dark:border-slate-700 overflow-x-auto">
+          {TABS.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
+                tab === t.id
+                  ? 'border-indigo-600 text-indigo-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+              }`}>
+              <t.icon size={15} />
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Search bar (not on overview) */}
+        {tab !== 'overview' && (
+          <div className="relative max-w-sm">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder={`Search ${tab}…`}
+              className="pl-8 pr-4 py-2 w-full border border-slate-200 dark:border-slate-600 rounded-xl text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                <X size={13} />
+              </button>
             )}
           </div>
+        )}
 
-          {/* Routes quick view */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-slate-800 dark:text-white">Routes Overview</h3>
-              <button onClick={() => setTab('routes')} className="text-xs text-sky-600 dark:text-sky-400 font-medium hover:underline">View all →</button>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {routes.slice(0, 4).map(r => (
-                <div key={r.id}
-                  onClick={() => setDetailRoute(r)}
-                  className="flex items-center gap-3 p-4 rounded-xl border border-slate-100 dark:border-slate-700 hover:border-sky-200 dark:hover:border-sky-800 cursor-pointer transition-colors">
-                  <div className="w-9 h-9 rounded-xl bg-sky-100 dark:bg-sky-900/30 flex items-center justify-center flex-shrink-0">
-                    <Route size={16} className="text-sky-600 dark:text-sky-400" />
+        {/* ── OVERVIEW ────────────────────────────────────────────────────── */}
+        {tab === 'overview' && summary && (
+          <div className="space-y-5">
+            {/* Stat cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: 'Total Vehicles', value: summary.buses?.total, icon: Bus, color: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30' },
+                { label: 'Active Drivers', value: summary.drivers?.active, icon: User, color: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30' },
+                { label: 'Active Routes',  value: summary.routes?.total, icon: Route, color: 'bg-sky-50 text-sky-600 dark:bg-sky-900/30' },
+                { label: 'Students Assigned', value: summary.assignments?.active, icon: Users, color: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30' },
+              ].map(stat => (
+                <div key={stat.label} className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-100 dark:border-slate-700 flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${stat.color}`}>
+                    <stat.icon size={18} />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm text-slate-800 dark:text-white truncate">{r.route_name}</p>
-                    <p className="text-xs text-slate-400">{r.assigned_students} students · {r.total_stops} stops</p>
+                  <div>
+                    <p className="text-2xl font-bold text-slate-800 dark:text-white">{stat.value ?? 0}</p>
+                    <p className="text-xs text-slate-500">{stat.label}</p>
                   </div>
-                  <ChevronRight size={14} className="text-slate-400 flex-shrink-0" />
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* ══ BUSES ══════════════════════════════════════════════════ */}
-      {tab === 'buses' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {buses.map(b => {
-            const Icon = BUS_STATUS_ICONS[b.status] || CheckCircle2;
-            const pct  = b.capacity > 0 ? Math.round((b.assigned_students / b.capacity) * 100) : 0;
-            const barColor = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : '#10b981';
-            return (
-              <div key={b.id} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 flex flex-col gap-4">
-                {/* Title row */}
+            {/* Occupancy */}
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-5">
+              <h3 className="font-semibold text-slate-800 dark:text-white text-sm mb-4">Vehicle Occupancy</h3>
+              <div className="space-y-3">
+                {(summary.occupancy || []).slice(0, 8).map(b => (
+                  <OccupancyBar key={b.bus_number} {...b} />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── VEHICLES ────────────────────────────────────────────────────── */}
+        {tab === 'vehicles' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            {filtered.buses.map(b => (
+              <div key={b.id} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-4 space-y-3">
                 <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-sky-100 dark:bg-sky-900/30 flex items-center justify-center">
-                      <Bus size={18} className="text-sky-600 dark:text-sky-400" />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Car size={16} className="text-indigo-500" />
+                      <span className="font-bold text-slate-800 dark:text-white">{b.bus_number}</span>
+                      <Badge className={STATUS_BUS[b.status]}>{b.status}</Badge>
                     </div>
-                    <div>
-                      <p className="font-bold text-slate-800 dark:text-white">{b.bus_number}</p>
-                      <p className="text-xs text-slate-400">{b.vehicle_number}</p>
-                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">{b.vehicle_number} · {b.make_model || '—'}</p>
                   </div>
-                  <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg ${BUS_STATUS_STYLES[b.status]}`}>
-                    <Icon size={11} /> {b.status}
-                  </span>
+                  <div className="flex gap-1">
+                    <button onClick={() => setBusModal(b)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-indigo-500"><Pencil size={14} /></button>
+                    <button onClick={() => setDelConfirm({ type: 'bus', id: b.id, name: b.bus_number })} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-red-500"><Trash2 size={14} /></button>
+                  </div>
                 </div>
 
-                {/* Info */}
-                {b.make_model && <p className="text-xs text-slate-500 dark:text-slate-400">{b.make_model} {b.manufacture_year ? `(${b.manufacture_year})` : ''}</p>}
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-500">Capacity</span>
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">{b.assigned_students}/{b.capacity}</span>
+                </div>
+                <div className="h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full bg-indigo-500" style={{ width: `${Math.min((b.assigned_students/b.capacity)*100, 100)}%` }} />
+                </div>
 
+                {(b.driver_full_name || b.driver_name) && (
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <User size={12} />
+                    <span>{b.driver_full_name || b.driver_name}</span>
+                    {b.driver_mobile && <><Phone size={11} /><span>{b.driver_mobile}</span></>}
+                  </div>
+                )}
                 {b.route_name && (
-                  <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                    <Route size={11} /> {b.route_name}
+                  <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                    <MapPin size={11} />
+                    <span>{b.route_name}</span>
                   </div>
                 )}
-
-                {/* Driver */}
-                {b.driver_name && (
-                  <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3">
-                    <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-600 flex items-center justify-center">
-                      <Users size={12} className="text-slate-500" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium text-slate-700 dark:text-slate-300">{b.driver_name}</p>
-                      {b.driver_phone && <p className="text-[11px] text-slate-400 flex items-center gap-1"><Phone size={9} /> {b.driver_phone}</p>}
-                    </div>
-                  </div>
-                )}
-
-                {/* Occupancy */}
-                <div>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-slate-500 dark:text-slate-400">Occupancy</span>
-                    <span className="font-bold text-slate-700 dark:text-slate-300">{b.assigned_students}/{b.capacity}</span>
-                  </div>
-                  <div className="h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-700"
-                      style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: barColor }} />
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex gap-2 pt-1">
-                  <button onClick={() => setBusModal(b)}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-slate-200 dark:border-slate-600 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
-                    <Pencil size={12} /> Edit
-                  </button>
-                  <button onClick={() => setDeleteTarget({ type: 'bus', item: b })}
-                    className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-red-200 dark:border-red-900/50 text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20">
-                    <Trash2 size={12} />
-                  </button>
-                </div>
               </div>
-            );
-          })}
-
-          {buses.length === 0 && (
-            <div className="col-span-3 text-center py-16 text-slate-400">
-              <Bus size={40} className="mx-auto mb-3 opacity-30" />
-              <p className="font-medium">No buses added yet</p>
-              <button onClick={() => setBusModal('new')} className="mt-3 text-sm text-sky-600 dark:text-sky-400 hover:underline font-medium">+ Add your first bus</button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ══ ROUTES ═════════════════════════════════════════════════ */}
-      {tab === 'routes' && (
-        <div className="space-y-3">
-          {routes.map(r => (
-            <div key={r.id}
-              className={`bg-white dark:bg-slate-800 rounded-2xl border p-5 transition-all ${
-                r.is_active ? 'border-slate-200 dark:border-slate-700' : 'border-dashed border-slate-300 dark:border-slate-600 opacity-70'
-              }`}>
-              <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div className="flex items-start gap-3 flex-1 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0">
-                    <Route size={18} className="text-indigo-600 dark:text-indigo-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-bold text-slate-800 dark:text-white">{r.route_name}</h3>
-                      {!r.is_active && <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 px-2 py-0.5 rounded-full font-medium">Inactive</span>}
-                    </div>
-                    <div className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 mt-1">
-                      <span className="font-medium text-slate-600 dark:text-slate-300">{r.start_point}</span>
-                      <Navigation size={12} />
-                      <span className="font-medium text-slate-600 dark:text-slate-300">{r.end_point}</span>
-                    </div>
-                    <div className="flex flex-wrap gap-4 mt-2 text-xs text-slate-400">
-                      {r.estimated_time && <span className="flex items-center gap-1"><Clock size={11} />{r.estimated_time} min</span>}
-                      <span className="flex items-center gap-1"><MapPin size={11} />{r.total_stops} stops</span>
-                      <span className="flex items-center gap-1"><Users size={11} />{r.assigned_students} students</span>
-                      {r.bus_number && <span className="flex items-center gap-1"><Bus size={11} />{r.bus_number}</span>}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex gap-2 flex-shrink-0">
-                  <button onClick={() => setDetailRoute(r)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 text-xs font-medium hover:bg-sky-100">
-                    <MapPin size={12} /> Stops
-                  </button>
-                  <button onClick={() => setRouteModal(r)}
-                    className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400"><Pencil size={14} /></button>
-                  <button onClick={() => setDeleteTarget({ type: 'route', item: r })}
-                    className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400"><Trash2 size={14} /></button>
-                </div>
-              </div>
-            </div>
-          ))}
-
-          {routes.length === 0 && (
-            <div className="text-center py-16 text-slate-400">
-              <Route size={40} className="mx-auto mb-3 opacity-30" />
-              <p className="font-medium">No routes defined yet</p>
-              <button onClick={() => setRouteModal('new')} className="mt-3 text-sm text-sky-600 dark:text-sky-400 hover:underline font-medium">+ Add your first route</button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ══ ASSIGNMENTS ════════════════════════════════════════════ */}
-      {tab === 'assignments' && (
-        <div className="space-y-4">
-          {/* Filters */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
-            <div className="flex flex-wrap gap-3">
-              <div className="relative flex-1 min-w-[180px]">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input value={assignFilter.search}
-                  onChange={e => setAssignFilter(p => ({ ...p, search: e.target.value }))}
-                  onKeyDown={e => e.key === 'Enter' && loadAssignments()}
-                  placeholder="Search by name or roll no…"
-                  className="w-full pl-9 pr-3 py-2 border border-slate-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-sky-500" />
-              </div>
-              <div className="relative">
-                <select value={assignFilter.route_id}
-                  onChange={e => setAssignFilter(p => ({ ...p, route_id: e.target.value }))}
-                  className="appearance-none pl-3 pr-7 py-2 border border-slate-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-white focus:ring-2 focus:ring-sky-500">
-                  <option value="">All Routes</option>
-                  {routes.map(r => <option key={r.id} value={r.id}>{r.route_name}</option>)}
-                </select>
-                <ChevronDown size={13} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              </div>
-              <div className="relative">
-                <select value={assignFilter.bus_id}
-                  onChange={e => setAssignFilter(p => ({ ...p, bus_id: e.target.value }))}
-                  className="appearance-none pl-3 pr-7 py-2 border border-slate-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-sm text-slate-700 dark:text-white focus:ring-2 focus:ring-sky-500">
-                  <option value="">All Buses</option>
-                  {buses.map(b => <option key={b.id} value={b.id}>{b.bus_number}</option>)}
-                </select>
-                <ChevronDown size={13} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              </div>
-              <button onClick={loadAssignments}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-sky-600 text-white text-sm font-medium hover:bg-sky-700">
-                <Search size={14} /> Search
-              </button>
-            </div>
-          </div>
-
-          {/* Table */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-              <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                {assignments.length} assignment{assignments.length !== 1 ? 's' : ''}
-              </p>
-            </div>
-
-            {loading ? (
-              <div className="flex items-center justify-center py-14 gap-2 text-slate-400">
-                <RefreshCw size={18} className="animate-spin" /> Loading…
-              </div>
-            ) : assignments.length === 0 ? (
-              <div className="text-center py-14 text-slate-400">
-                <UserCheck size={40} className="mx-auto mb-3 opacity-30" />
-                <p className="font-medium">No assignments found</p>
-                <button onClick={() => setAssignModal('new')} className="mt-3 text-sm text-sky-600 dark:text-sky-400 hover:underline font-medium">+ Assign a student</button>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-700/50 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                      <th className="text-left px-6 py-3">Student</th>
-                      <th className="text-left px-4 py-3">Class</th>
-                      <th className="text-left px-4 py-3">Route</th>
-                      <th className="text-left px-4 py-3">Bus / Driver</th>
-                      <th className="text-left px-4 py-3">Stop</th>
-                      <th className="text-left px-4 py-3">Type</th>
-                      <th className="text-left px-4 py-3">Status</th>
-                      <th className="text-center px-4 py-3">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                    {assignments.map(a => (
-                      <tr key={a.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
-                        <td className="px-6 py-3">
-                          <div>
-                            <p className="font-semibold text-slate-800 dark:text-white">{a.student_name}</p>
-                            <p className="text-xs text-slate-400">{a.roll_number}</p>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-slate-600 dark:text-slate-300 whitespace-nowrap">{a.class_section}</td>
-                        <td className="px-4 py-3">
-                          <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400">{a.route_name}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div>
-                            <p className="font-medium text-slate-700 dark:text-slate-300">{a.bus_number}</p>
-                            {a.driver_name && <p className="text-[11px] text-slate-400 flex items-center gap-1"><Phone size={9} />{a.driver_phone}</p>}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
-                          {a.stop_name || '—'}
-                          {a.pickup_time && <span className="block text-[11px] text-slate-400">{a.pickup_time?.slice(0,5)}</span>}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="text-xs font-medium text-slate-600 dark:text-slate-300 capitalize">{a.transport_type}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`text-xs font-semibold px-2 py-1 rounded-lg ${ASSIGN_STATUS_STYLES[a.status]}`}>{a.status}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-center gap-2">
-                            <button onClick={() => setAssignModal(a)}
-                              className="p-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500"><Pencil size={14} /></button>
-                            <button onClick={() => setDeleteTarget({ type: 'assignment', item: a })}
-                              className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500"><Trash2 size={14} /></button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            ))}
+            {filtered.buses.length === 0 && (
+              <div className="col-span-3 py-12 text-center text-slate-400 text-sm">No vehicles found</div>
             )}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ── Modals ───────────────────────────────────────────────── */}
-      {busModal    && <BusModal    bus={busModal === 'new' ? null : busModal}       onSave={handleSaveBus}        onClose={() => setBusModal(null)} />}
-      {routeModal  && <RouteModal  route={routeModal === 'new' ? null : routeModal} onSave={handleSaveRoute}      onClose={() => setRouteModal(null)} />}
-      {assignModal && <AssignModal assignment={assignModal === 'new' ? null : assignModal} buses={buses} routes={routes} onSave={handleSaveAssignment} onClose={() => setAssignModal(null)} />}
+        {/* ── DRIVERS ──────────────────────────────────────────────────────── */}
+        {tab === 'drivers' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            {filtered.drivers.map(d => (
+              <div key={d.id} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-4 space-y-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center shrink-0">
+                      {d.photo_url
+                        ? <img src={d.photo_url} alt="" className="w-10 h-10 rounded-xl object-cover" />
+                        : <User size={18} className="text-indigo-500" />}
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-800 dark:text-white text-sm">{d.full_name}</p>
+                      <Badge className={STATUS_BUS[d.status] || STATUS_BUS.active}>{d.status}</Badge>
+                    </div>
+                  </div>
+                  <div className="flex gap-1">
+                    <button onClick={() => setDriverModal(d)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-indigo-500"><Pencil size={14} /></button>
+                    <button onClick={() => setDelConfirm({ type: 'driver', id: d.id, name: d.full_name })} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-red-500"><Trash2 size={14} /></button>
+                  </div>
+                </div>
 
-      {deleteTarget && (
-        <ConfirmDelete
-          title={`Delete ${deleteTarget.type === 'bus' ? 'Bus' : deleteTarget.type === 'route' ? 'Route' : 'Assignment'}`}
-          detail={`Remove "${deleteTarget.item.bus_number || deleteTarget.item.route_name || deleteTarget.item.student_name}"? This cannot be undone.`}
-          onConfirm={handleDelete}
-          onClose={() => setDeleteTarget(null)}
+                <div className="space-y-1.5 text-xs text-slate-500">
+                  <div className="flex items-center gap-1.5"><Phone size={11} /><span>{d.phone}</span></div>
+                  {d.cnic           && <div className="flex items-center gap-1.5"><IdCard size={11} /><span>CNIC: {d.cnic}</span></div>}
+                  {d.license_number && <div className="flex items-center gap-1.5"><ShieldCheck size={11} /><span>Lic: {d.license_number}</span></div>}
+                  {d.bus_number     && <div className="flex items-center gap-1.5"><Bus size={11} /><span>{d.bus_number} · {d.route_name || 'No route'}</span></div>}
+                </div>
+
+                {d.assigned_students > 0 && (
+                  <div className="flex items-center gap-1.5 text-xs text-indigo-600 dark:text-indigo-400">
+                    <Users size={11} />
+                    <span>{d.assigned_students} student{d.assigned_students !== 1 ? 's' : ''} assigned</span>
+                  </div>
+                )}
+              </div>
+            ))}
+            {filtered.drivers.length === 0 && (
+              <div className="col-span-3 py-12 text-center text-slate-400 text-sm">No drivers found</div>
+            )}
+          </div>
+        )}
+
+        {/* ── ROUTES ───────────────────────────────────────────────────────── */}
+        {tab === 'routes' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            {routes.map(r => (
+              <div key={r.id} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-4 space-y-2">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 min-w-0 pr-2">
+                    <p className="font-bold text-slate-800 dark:text-white text-sm truncate">{r.route_name}</p>
+                    <p className="text-xs text-slate-400">{r.start_point} → {r.end_point}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Badge className={r.is_active ? STATUS_BUS.active : STATUS_BUS.inactive}>
+                      {r.is_active ? 'Active' : 'Inactive'}
+                    </Badge>
+                    <button onClick={() => setRouteModal(r)}
+                      className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-indigo-500">
+                      <Pencil size={13} />
+                    </button>
+                    <button onClick={() => setDelConfirm({ type: 'route', id: r.id, name: r.route_name })}
+                      className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-red-500">
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 text-xs text-slate-500">
+                  <span><MapPin size={11} className="inline mr-1" />{r.total_stops} stops</span>
+                  <span><Users size={11} className="inline mr-1" />{r.assigned_students} students</span>
+                  {r.distance_km && <span>{r.distance_km} km</span>}
+                </div>
+                {r.bus_number && (
+                  <p className="text-xs text-slate-400 flex items-center gap-1.5">
+                    <Bus size={11} />{r.bus_number}
+                  </p>
+                )}
+              </div>
+            ))}
+            {routes.length === 0 && (
+              <div className="col-span-3 py-12 text-center text-slate-400 text-sm">No routes found. Click "Add Route" to create one.</div>
+            )}
+          </div>
+        )}
+
+        {/* ── ASSIGNMENTS ──────────────────────────────────────────────────── */}
+        {tab === 'assignments' && (
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80">
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Student</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden md:table-cell">Vehicle</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden lg:table-cell">Route / Stop</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider hidden sm:table-cell">Driver</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50">
+                  {filtered.assigns.map(a => (
+                    <tr key={a.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+                      <td className="px-4 py-3">
+                        <p className="font-semibold text-slate-800 dark:text-slate-100">{a.student_name}</p>
+                        <p className="text-xs text-slate-400">{a.roll_number} · {a.class_section}</p>
+                      </td>
+                      <td className="px-4 py-3 hidden md:table-cell">
+                        <p className="font-medium text-slate-700 dark:text-slate-200">{a.bus_number}</p>
+                        <p className="text-xs text-slate-400 capitalize">{(a.vehicle_type || 'bus').replace('_',' ')}</p>
+                      </td>
+                      <td className="px-4 py-3 hidden lg:table-cell">
+                        <p className="text-slate-700 dark:text-slate-200 text-xs">{a.route_name}</p>
+                        {a.stop_name && <p className="text-xs text-slate-400">{a.stop_name} {a.pickup_time ? `· ${a.pickup_time}` : ''}</p>}
+                      </td>
+                      <td className="px-4 py-3 hidden sm:table-cell">
+                        <p className="text-slate-600 dark:text-slate-300 text-xs">{a.driver_name || '—'}</p>
+                        {a.driver_phone && <p className="text-xs text-slate-400">{a.driver_phone}</p>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge className={STATUS_ASSIGN[a.status]}>{a.status}</Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1 justify-end">
+                          {/* PDF */}
+                          <button
+                            onClick={() => handlePdf(a.id)}
+                            disabled={pdfLoading === a.id}
+                            className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-indigo-500 disabled:opacity-40"
+                            title="Download transport slip PDF"
+                          >
+                            {pdfLoading === a.id
+                              ? <RefreshCw size={13} className="animate-spin" />
+                              : <FileText size={13} />}
+                          </button>
+                          {/* Transfer */}
+                          <button
+                            onClick={() => setTransferModal(a)}
+                            className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-amber-500"
+                            title="Transfer to different bus"
+                          >
+                            <ArrowRightLeft size={13} />
+                          </button>
+                          {/* Delete */}
+                          <button
+                            onClick={() => setDelConfirm({ type: 'assignment', id: a.id, name: a.student_name })}
+                            className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-red-500"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {filtered.assigns.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="text-center py-12 text-slate-400 text-sm">
+                        {search ? 'No matching assignments' : 'No active assignments'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── MODALS ────────────────────────────────────────────────────────── */}
+      {busModal && (
+        <VehicleModal
+          bus={busModal === 'new' ? null : busModal}
+          drivers={drivers}
+          onSave={handleSaveBus}
+          onClose={() => setBusModal(null)}
         />
       )}
 
-      {/* Route detail slide-over */}
-      {detailRoute && (
-        <RouteDetailPanel
-          route={detailRoute}
+      {driverModal && (
+        <DriverModal
+          driver={driverModal === 'new' ? null : driverModal}
+          onSave={handleSaveDriver}
+          onClose={() => setDriverModal(null)}
+        />
+      )}
+
+      {assignModal && (
+        <AssignModal
           buses={buses}
-          onClose={() => setDetailRoute(null)}
-          onRefresh={loadRoutes}
+          routes={routes}
+          unassigned={unassigned}
+          onSave={handleAssign}
+          onClose={() => setAssignModal(false)}
+          academicYear={academicYear}
+        />
+      )}
+
+      {routeModal && (
+        <RouteModal
+          route={routeModal === 'new' ? null : routeModal}
+          onSave={handleSaveRoute}
+          onClose={() => setRouteModal(null)}
+        />
+      )}
+
+      {transferModal && (
+        <TransferModal
+          assignment={transferModal}
+          buses={buses}
+          routes={routes}
+          onSave={handleTransfer}
+          onClose={() => setTransferModal(null)}
+        />
+      )}
+
+      {delConfirm && (
+        <ConfirmDelete
+          title={`Delete ${delConfirm.type}`}
+          detail={`Are you sure you want to delete "${delConfirm.name}"? This cannot be undone.`}
+          onConfirm={handleDelete}
+          onClose={() => setDelConfirm(null)}
         />
       )}
     </Layout>

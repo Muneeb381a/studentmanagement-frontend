@@ -12,12 +12,17 @@ const ROLE_HOME = {
   parent:  '/parent-dashboard',
 };
 
-const DEMO_ACCOUNTS = [
+// Demo accounts are only shown in development mode.
+// In production (VITE_SHOW_DEMO_ACCOUNTS=true), they can be opted-in explicitly.
+// NEVER ship real production passwords here.
+const SHOW_DEMO = import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO_ACCOUNTS === 'true';
+
+const DEMO_ACCOUNTS = SHOW_DEMO ? [
   { role: 'Admin',       username: 'admin',      password: 'admin123',      color: '#6366f1', bg: 'rgba(99,102,241,0.15)',  border: 'rgba(99,102,241,0.3)'  },
   { role: 'Teacher',     username: 'teacher',    password: 'teacher123',    color: '#0ea5e9', bg: 'rgba(14,165,233,0.15)',  border: 'rgba(14,165,233,0.3)'  },
   { role: 'Student',     username: 'student',    password: 'student123',    color: '#10b981', bg: 'rgba(16,185,129,0.15)', border: 'rgba(16,185,129,0.3)'  },
   { role: 'Super Admin', username: 'superadmin', password: 'superadmin123', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)', border: 'rgba(245,158,11,0.3)'  },
-];
+] : [];
 
 // ── input class shared between both steps ─────────────────────────────────────
 const INPUT = 'w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all';
@@ -325,8 +330,8 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* ── Demo Accounts ── */}
-        <div className="mt-5">
+        {/* ── Demo Accounts — only rendered in dev / when VITE_SHOW_DEMO_ACCOUNTS=true ── */}
+        {DEMO_ACCOUNTS.length > 0 && <div className="mt-5">
           <div className="flex items-center gap-3 mb-3">
             <div className="flex-1 h-px bg-white/10" />
             <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest whitespace-nowrap">
@@ -352,6 +357,9 @@ export default function LoginPage() {
                   <p className="text-[10px] mt-0.5 font-mono truncate" style={{ color: acc.color }}>
                     {acc.username}
                   </p>
+                  <p className="text-[10px] font-mono truncate text-slate-500">
+                    {acc.password}
+                  </p>
                 </div>
               </button>
             ))}
@@ -359,7 +367,7 @@ export default function LoginPage() {
           <p className="text-center text-[10px] text-slate-600 mt-2">
             Click any card to auto-fill credentials
           </p>
-        </div>
+        </div>}
 
       </div>
     </div>

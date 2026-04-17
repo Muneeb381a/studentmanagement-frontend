@@ -264,6 +264,14 @@ export const NAV_LINKS = [
     description: 'School info & configuration',
   },
 
+  // ── Documentation ─────────────────────────────────────────────────────────
+  {
+    label: 'Documentation',
+    to: '/docs',
+    icon: BookOpen,
+    description: 'API reference, user & developer guides',
+  },
+
   // ── Admin tools ───────────────────────────────────────────────────────────
   {
     label: 'Audit Logs',

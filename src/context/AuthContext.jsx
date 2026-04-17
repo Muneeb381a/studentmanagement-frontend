@@ -1,5 +1,5 @@
-import { createContext, useContext, useState } from 'react';
-import { login as apiLogin, logout as apiLogout } from '../api/auth';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { login as apiLogin, logout as apiLogout, getMe } from '../api/auth';
 import { tokenStorage } from '../api/axios';
 
 const AuthContext = createContext(null);
@@ -9,18 +9,47 @@ export function AuthProvider({ children }) {
     try { return JSON.parse(localStorage.getItem('user')); }
     catch { return null; }
   });
+  const [authLoading, setAuthLoading] = useState(true);
+
+  /**
+   * Re-validate the stored user against the backend on every page load/refresh.
+   * This ensures stale role/permission data is corrected without requiring re-login.
+   * Only runs when we actually have an access token.
+   */
+  const revalidateUser = useCallback(async () => {
+    const token = tokenStorage.getAccess();
+    if (!token) {
+      setAuthLoading(false);
+      return;
+    }
+    try {
+      const res  = await getMe();
+      // /auth/me returns { success, data: { ...jwtPayload } } — not unwrapped (object, not array)
+      const fresh = res.data?.data ?? res.data;
+      if (fresh?.id) {
+        setUser(fresh);
+        localStorage.setItem('user', JSON.stringify(fresh));
+      }
+    } catch {
+      // Token invalid/expired — clear state; silent refresh is handled by axios interceptor
+      // Don't call signOut() here to avoid infinite loops; just clear local state
+      tokenStorage.clear();
+      localStorage.removeItem('user');
+      setUser(null);
+    } finally {
+      setAuthLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    revalidateUser();
+  }, [revalidateUser]);
 
   /**
    * Sign in — supports both single-tenant and multi-tenant modes.
    *
    * Single-tenant (existing):  signIn(username, password)
    * Multi-tenant (new):        signIn(username, password, school_code)
-   *
-   * On success the JWT payload now includes:
-   *   { id, username, name, role, entity_id, schema?, school_name?, school_code? }
-   *
-   * `schema` is forwarded transparently in every subsequent API call via the
-   * axios interceptor — no component needs to know about it.
    */
   const signIn = async (username, password, school_code = null) => {
     const body = { username, password };
@@ -40,7 +69,6 @@ export function AuthProvider({ children }) {
 
   /**
    * Sign out — revokes the refresh token server-side, then clears local state.
-   * Errors are swallowed so a failed network call never prevents local logout.
    */
   const signOut = async () => {
     try {
@@ -54,8 +82,21 @@ export function AuthProvider({ children }) {
     }
   };
 
+  /**
+   * Update the local user state + localStorage when profile data changes
+   * (e.g. name change, avatar update) without requiring a full re-login.
+   */
+  const updateUser = (patch) => {
+    setUser(prev => {
+      if (!prev) return prev;
+      const updated = { ...prev, ...patch };
+      localStorage.setItem('user', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   return (
-    <AuthContext.Provider value={{ user, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, signIn, signOut, updateUser, authLoading }}>
       {children}
     </AuthContext.Provider>
   );

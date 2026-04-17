@@ -5,6 +5,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import { PageLoader } from './components/ui/Spinner';
+import ChatbotWidget from './components/chatbot/ChatbotWidget';
 
 /* Auth — kept eager: needed on cold load / redirect */
 import LoginPage          from './pages/LoginPage';
@@ -93,6 +94,7 @@ const WhatsAppPage           = lazy(() => import('./pages/WhatsAppPage'));
 const TimetableGeneratorPage = lazy(() => import('./pages/TimetableGeneratorPage'));
 const AuditLogsPage          = lazy(() => import('./pages/AuditLogsPage'));
 const SystemHealthPage       = lazy(() => import('./pages/SystemHealthPage'));
+const DocsPage               = lazy(() => import('./pages/DocsPage'));
 const BillingPage            = lazy(() => import('./pages/BillingPage'));
 const DocumentsPage          = lazy(() => import('./pages/DocumentsPage'));
 const FeeInstallmentsPage    = lazy(() => import('./pages/FeeInstallmentsPage'));
@@ -107,6 +109,8 @@ const WebsiteBuilderPage     = lazy(() => import('./pages/WebsiteBuilderPage'));
 const LiveTrackingPage       = lazy(() => import('./pages/LiveTrackingPage'));
 const DriverTrackingPage     = lazy(() => import('./pages/DriverTrackingPage'));
 const ChatPage               = lazy(() => import('./pages/ChatPage'));
+const RolesPage              = lazy(() => import('./pages/RolesPage'));
+const StudentLifecyclePage   = lazy(() => import('./pages/StudentLifecyclePage'));
 /* Redirect / → role-appropriate home */
 function RoleRedirect() {
   const { user } = useAuth();
@@ -449,7 +453,10 @@ export default function App() {
             <Route path="/timetable-generator"  element={<ProtectedRoute roles={['admin']}><TimetableGeneratorPage /></ProtectedRoute>} />
             <Route path="/audit-logs"           element={<ProtectedRoute roles={['admin']}><AuditLogsPage /></ProtectedRoute>} />
             <Route path="/system-health"        element={<ProtectedRoute roles={['admin']}><SystemHealthPage /></ProtectedRoute>} />
+            <Route path="/docs"                 element={<ProtectedRoute><DocsPage /></ProtectedRoute>} />
             <Route path="/billing"              element={<ProtectedRoute roles={['admin']}><BillingPage /></ProtectedRoute>} />
+            <Route path="/roles"                element={<ProtectedRoute roles={['admin']}><RolesPage /></ProtectedRoute>} />
+            <Route path="/lifecycle/:studentId" element={<ProtectedRoute><StudentLifecyclePage /></ProtectedRoute>} />
             <Route path="/documents"            element={<ProtectedRoute roles={['admin','teacher']}><DocumentsPage /></ProtectedRoute>} />
             <Route path="/fee-installments"     element={<ProtectedRoute roles={['admin']}><FeeInstallmentsPage /></ProtectedRoute>} />
             <Route path="/discipline"           element={<ProtectedRoute roles={['admin','teacher']}><DisciplinePage /></ProtectedRoute>} />
@@ -485,6 +492,8 @@ export default function App() {
             error:   { iconTheme: { primary: '#ef4444', secondary: '#fff' } },
           }}
         />
+        {/* Floating chatbot assistant — rendered outside <Routes> so it persists across navigation */}
+        <ChatbotWidget />
       </AuthProvider>
     </ThemeProvider>
   );

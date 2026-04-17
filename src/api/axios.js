@@ -90,8 +90,9 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // Any other hard 401 → clear session and redirect
-    if (status === 401 && !originalRequest._retry) {
+    // Hard 401 → only redirect if we actually had a token (session expired/invalid)
+    // If code is NO_TOKEN there was nothing to expire — just reject quietly
+    if (status === 401 && !originalRequest._retry && code !== 'NO_TOKEN') {
       tokenStorage.clear();
       window.location.href = '/login';
     }

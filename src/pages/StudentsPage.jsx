@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Users, UserCheck, TrendingUp, Filter, X, Pencil, Trash2, Mail, Phone, CreditCard, ArrowUpCircle, FileText, BarChart2, Printer, Upload, Download, KeyRound, Copy, Check, ShieldCheck, AlertTriangle, Loader2 } from 'lucide-react';
+import { Plus, Search, Users, UserCheck, TrendingUp, Filter, X, Pencil, Trash2, Mail, Phone, CreditCard, ArrowUpCircle, FileText, BarChart2, Printer, Upload, Download, KeyRound, Copy, Check, ShieldCheck, AlertTriangle, Loader2, Activity } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Layout          from '../components/layout/Layout';
 import { SELECT_CLS }  from '../components/ui/Input';
@@ -468,6 +468,10 @@ export default function StudentsPage() {
                         </div>
                       </div>
                       <div className="flex flex-col gap-1 shrink-0">
+                        <button title="Timeline" onClick={() => navigate(`/lifecycle/${s.id}`)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all">
+                          <Activity size={14} />
+                        </button>
                         <button title="Performance" onClick={() => navigate(`/students/${s.id}/performance`)}
                           className="p-1.5 rounded-lg text-slate-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/30 transition-all">
                           <BarChart2 size={14} />
@@ -540,6 +544,11 @@ export default function StudentsPage() {
                           </td>
                           <td className="px-4 py-3 pr-5">
                             <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                              <button title="Timeline"
+                                onClick={() => navigate(`/lifecycle/${s.id}`)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all">
+                                <Activity size={13} />
+                              </button>
                               <button title="Performance"
                                 onClick={() => navigate(`/students/${s.id}/performance`)}
                                 className="p-1.5 rounded-lg text-slate-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/30 transition-all">

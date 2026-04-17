@@ -1,4 +1,4 @@
-import api from './api';
+import api from './axios';
 
 export const getStudentTimeline = (studentId, params = {}) =>
   api.get(`/lifecycle/${studentId}`, { params });

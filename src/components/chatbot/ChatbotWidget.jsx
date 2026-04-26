@@ -133,9 +133,7 @@ export default function ChatbotWidget() {
     }
   }, [open]);
 
-  // Don't render for guests — must come after all hooks
-  if (!user) return null;
-
+  // All helper functions defined before the early return so hooks count is always consistent
   function appendBot(text) {
     setMessages(prev => [...prev, { from: 'bot', text, id: Date.now() + Math.random() }]);
     if (!open) setUnreadCount(n => n + 1);
@@ -168,6 +166,9 @@ export default function ChatbotWidget() {
       setLoading(false);
     }
   }, [loading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Guard is AFTER all hooks/callbacks so hook count stays constant every render
+  if (!user) return null;
 
   function handleKeyDown(e) {
     if (e.key === 'Enter' && !e.shiftKey) {

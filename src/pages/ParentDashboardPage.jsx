@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   Banknote, CheckCircle2, NotebookPen, FileBarChart2,
   TrendingUp, AlertTriangle, Video, MessageSquare,
-  BookOpen, RefreshCw, ChevronRight, Bell,
+  BookOpen, RefreshCw, ChevronRight, Bell, Users,
 } from 'lucide-react';
 import Layout from '../components/layout/Layout';
 import { PageLoader } from '../components/ui/Spinner';
@@ -12,7 +12,7 @@ import { getStudent } from '../api/students';
 import { getStudentHistory } from '../api/attendance';
 import { getInvoices } from '../api/fees';
 import { getMyClasses } from '../api/onlineClasses';
-import { getParentFeed } from '../api/parentFeed';
+import { getParentFeed, getMyChildren } from '../api/parentFeed';
 import api from '../api/axios';
 
 function greeting() {
@@ -65,6 +65,8 @@ function FeedItem({ item }) {
 
 export default function ParentDashboardPage() {
   const { user } = useAuth();
+  const [children,      setChildren]      = useState([]);   // all linked children
+  const [selectedId,    setSelectedId]    = useState(null); // currently viewed child
   const [child,         setChild]         = useState(null);
   const [attendance,    setAttendance]    = useState([]);
   const [invoices,      setInvoices]      = useState([]);
@@ -73,38 +75,63 @@ export default function ParentDashboardPage() {
   const [feedLoading,   setFeedLoading]   = useState(true);
   const [loading,       setLoading]       = useState(true);
 
-  const childId   = user.entity_id;
   const thisMonth = new Date().toISOString().slice(0, 7);
 
-  const loadFeed = useCallback(async () => {
+  // For non-parent roles (admin previewing), fall back to entity_id
+  const effectiveId = user.role === 'parent' ? selectedId : (user.entity_id || null);
+
+  const loadFeed = useCallback(async (cid) => {
+    if (!cid) return;
     setFeedLoading(true);
     try {
-      const res = await getParentFeed({ limit: 40 });
+      const res = await getParentFeed({ limit: 40, student_id: cid });
       setFeed(Array.isArray(res.data?.data) ? res.data.data : []);
     } catch { /* silent */ }
     setFeedLoading(false);
   }, []);
 
-  useEffect(() => {
-    const fetchAll = async () => {
-      try {
-        const [childRes, attRes, invRes, ocRes] = await Promise.all([
-          childId ? getStudent(childId)                              : Promise.resolve({ data: null }),
-          childId ? getStudentHistory(childId, thisMonth)            : Promise.resolve({ data: [] }),
-          childId ? getInvoices({ student_id: childId, limit: 10 }) : Promise.resolve({ data: [] }),
-          getMyClasses().catch(() => ({ data: [] })),
-        ]);
+  const loadChildData = useCallback(async (cid) => {
+    if (!cid) return;
+    setLoading(true);
+    try {
+      const [childRes, attRes, invRes, ocRes] = await Promise.all([
+        getStudent(cid),
+        getStudentHistory(cid, thisMonth),
+        getInvoices({ student_id: cid, limit: 10 }),
+        getMyClasses().catch(() => ({ data: [] })),
+      ]);
+      setChild(childRes.data?.data ?? childRes.data ?? null);
+      setAttendance(Array.isArray(attRes.data) ? attRes.data : []);
+      setInvoices(Array.isArray(invRes.data) ? invRes.data : []);
+      setOnlineClasses(Array.isArray(ocRes.data) ? ocRes.data.slice(0, 4) : []);
+    } catch { /* silent */ }
+    setLoading(false);
+  }, [thisMonth]);
 
-        setChild(childRes.data?.data ?? childRes.data ?? null);
-        setAttendance(Array.isArray(attRes.data) ? attRes.data : []);
-        setInvoices(Array.isArray(invRes.data) ? invRes.data : []);
-        setOnlineClasses(Array.isArray(ocRes.data) ? ocRes.data.slice(0, 4) : []);
-      } catch { /* silent */ }
-      setLoading(false);
-    };
-    fetchAll();
-    loadFeed();
-  }, [childId, loadFeed]);
+  // On mount: load children list, then auto-select first
+  useEffect(() => {
+    if (user.role === 'parent') {
+      getMyChildren()
+        .then(r => {
+          const kids = Array.isArray(r.data) ? r.data : [];
+          setChildren(kids);
+          if (kids.length > 0) setSelectedId(kids[0].id);
+        })
+        .catch(() => {
+          // Fallback to entity_id for old accounts not yet migrated
+          if (user.entity_id) setSelectedId(user.entity_id);
+        });
+    } else {
+      if (user.entity_id) setSelectedId(user.entity_id);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (effectiveId) {
+      loadChildData(effectiveId);
+      loadFeed(effectiveId);
+    }
+  }, [effectiveId, loadChildData, loadFeed]);
 
   const presentDays   = attendance.filter(r => r.status === 'present').length;
   const totalDays     = attendance.length;
@@ -134,16 +161,49 @@ export default function ParentDashboardPage() {
       {/* Content */}
       <div className="relative z-10 px-4 sm:px-6 lg:px-8 -mt-12 pb-12 space-y-6">
 
+        {/* ── Child Switcher (shown only when parent has 2+ children) ─────── */}
+        {children.length > 1 && (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Users size={14} className="text-slate-400" />
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Select Child</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {children.map(kid => (
+                <button key={kid.id} onClick={() => setSelectedId(kid.id)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition-all ${
+                    selectedId === kid.id
+                      ? 'text-white shadow-md'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                  style={selectedId === kid.id ? { background: 'linear-gradient(135deg,#10b981,#059669)' } : {}}>
+                  <span className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">
+                    {(kid.full_name || 'S')[0].toUpperCase()}
+                  </span>
+                  <span>{kid.full_name}</span>
+                  {kid.class_name && <span className="text-xs opacity-70">· {kid.class_name}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-t-emerald-600 border-emerald-200 rounded-full animate-spin" /></div>
+        ) : null}
+
         {/* Child info card */}
-        {child ? (
+        {child && !loading ? (
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 p-5 flex items-center gap-4">
             <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-white font-extrabold text-xl shadow-md"
               style={{ background: 'linear-gradient(135deg, #10b981, #34d399)' }}>
-              {(child.name || 'S')[0]}
+              {(child.name || child.full_name || 'S')[0].toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-0.5">Your Child</p>
-              <p className="text-lg font-extrabold text-slate-800 dark:text-white">{child.name}</p>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-0.5">
+                {children.length > 1 ? 'Selected Child' : 'Your Child'}
+              </p>
+              <p className="text-lg font-extrabold text-slate-800 dark:text-white">{child.name || child.full_name}</p>
               <p className="text-sm text-slate-500">
                 {child.class_name || '—'} · Roll #{child.roll_number || '—'} · {child.status || 'active'}
               </p>
@@ -154,13 +214,13 @@ export default function ParentDashboardPage() {
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 text-xs font-semibold transition-colors">
                 <MessageSquare size={12} /> Message Teacher
               </Link>
-              <Link to="/parent-fee-ledger"
+              <Link to={`/parent-fee-ledger${effectiveId ? `?student_id=${effectiveId}` : ''}`}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-700 dark:text-red-400 text-xs font-semibold transition-colors">
                 <Banknote size={12} /> Fee Ledger
               </Link>
             </div>
           </div>
-        ) : !childId ? (
+        ) : !loading && !effectiveId ? (
           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-4 flex items-center gap-3">
             <AlertTriangle size={16} className="text-amber-500" />
             <p className="text-sm text-amber-700 dark:text-amber-300">

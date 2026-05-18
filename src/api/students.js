@@ -31,8 +31,10 @@ export const deleteStudentDocument = (studentId, docId) =>
   api.delete(`/students/${studentId}/documents/${docId}`);
 
 // Credentials
-export const getStudentCredentials   = (id) => api.get(`/students/${id}/credentials`);
-export const resetStudentCredentials = (id) => api.post(`/students/${id}/reset-credentials`);
+export const getStudentCredentials     = (id) => api.get(`/students/${id}/credentials`);
+export const resetStudentCredentials   = (id) => api.post(`/students/${id}/reset-credentials`);
+export const getParentCredentials      = (id) => api.get(`/students/${id}/parent-credentials`);
+export const resetParentCredentials    = (id) => api.post(`/students/${id}/reset-parent-credentials`);
 
 // Import / Export
 export const getStudentImportTemplate = () =>

@@ -13,7 +13,9 @@ export const setRolePerms   = (id, perms) => api.put(`/rbac/roles/${id}/permissi
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 export const getRbacUsers      = (params)          => api.get('/rbac/users', { params });
+export const createRbacUser    = (data)            => api.post('/rbac/users', data);
 export const setUserRole       = (userId, role)    => api.put(`/rbac/users/${userId}/role`, { role });
+export const deactivateUser    = (userId)          => api.delete(`/rbac/users/${userId}`);
 export const getUserPerms      = (userId)          => api.get(`/rbac/users/${userId}/permissions`);
 export const setUserPerms      = (userId, data)    => api.put(`/rbac/users/${userId}/permissions`, data);
 

@@ -10,6 +10,7 @@ const BLANK = {
   date_of_birth: '', qualification: '', subject: '',
   join_date: '', status: 'active', address: '',
   assigned_grades: [],
+  salary: '', designation: '', employee_id: '',
 };
 
 const inputCls   = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 dark:focus:border-emerald-500 text-sm placeholder-slate-400 dark:placeholder-slate-600 transition-all';
@@ -40,6 +41,9 @@ export default function TeacherFormModal({ isOpen, onClose, onSubmit, teacherDat
       status:          teacherData.status          || 'active',
       address:         teacherData.address         || '',
       assigned_grades: teacherData.assigned_grades || [],
+      salary:          teacherData.salary          != null ? String(teacherData.salary) : '',
+      designation:     teacherData.designation     || '',
+      employee_id:     teacherData.employee_id     || '',
     } : BLANK);
   }, [teacherData, isOpen]);
 
@@ -217,6 +221,18 @@ export default function TeacherFormModal({ isOpen, onClose, onSubmit, teacherDat
                     <option value="">Select</option>
                     {QUALIFICATIONS.map(q => <option key={q} value={q}>{q}</option>)}
                   </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Designation</label>
+                  <input name="designation" value={form.designation} onChange={onChange} placeholder="e.g. Senior Teacher" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Employee ID</label>
+                  <input name="employee_id" value={form.employee_id} onChange={onChange} placeholder="e.g. EMP-001" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Monthly Salary (PKR)</label>
+                  <input name="salary" type="number" min="0" step="1" value={form.salary} onChange={onChange} placeholder="e.g. 45000" className={inputCls} />
                 </div>
                 <div>
                   <label className={labelCls}>Join Date</label>

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   GraduationCap, Plus, Search, X, Pencil, Trash2, Eye,
   Users, UserCheck, TrendingUp, Mail, Phone, BookOpen, Upload, Download,
-  KeyRound, Copy, Check, Printer, ShieldCheck,
+  KeyRound, Copy, Check, Printer, ShieldCheck, FileText,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Layout from '../components/layout/Layout';
@@ -14,7 +14,7 @@ import ImportModal from '../components/ui/ImportModal';
 import Avatar from '../components/ui/Avatar';
 import EmptyState from '../components/ui/EmptyState';
 import TeacherFormModal from '../components/TeacherFormModal';
-import { getTeachers, createTeacher, updateTeacher, deleteTeacher, getTeacherImportTemplate, importTeachers, exportTeachers } from '../api/teachers';
+import { getTeachers, createTeacher, updateTeacher, deleteTeacher, getTeacherImportTemplate, importTeachers, exportTeachers, getTeacherCredentials } from '../api/teachers';
 import { toPct, formatDate, downloadBlob } from '../utils';
 import Pagination from '../components/ui/Pagination';
 import { TEACHER_STATUS_STYLES } from '../constants';
@@ -124,7 +124,7 @@ function CredentialCard({ teacher, credentials, onClose }) {
 }
 
 /* ── Teacher card ── */
-function TeacherCard({ teacher, onEdit, onDelete, onView }) {
+function TeacherCard({ teacher, onEdit, onDelete, onView, onDocuments, onCredentials }) {
   const statusStyle = TEACHER_STATUS_STYLES[teacher.status] || TEACHER_STATUS_STYLES.inactive;
 
   return (
@@ -189,8 +189,8 @@ function TeacherCard({ teacher, onEdit, onDelete, onView }) {
         )}
       </div>
 
-      {/* Actions */}
-      <div className="flex gap-2 px-5 py-3 mt-auto border-t border-slate-100 dark:border-slate-800">
+      {/* Actions — row 1: primary */}
+      <div className="flex gap-2 px-5 pt-3 border-t border-slate-100 dark:border-slate-800">
         <button
           onClick={() => onView(teacher)}
           className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-bold rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-700 dark:hover:bg-slate-100 transition-all hover:shadow-md"
@@ -210,6 +210,21 @@ function TeacherCard({ teacher, onEdit, onDelete, onView }) {
           <Trash2 size={14} />
         </button>
       </div>
+      {/* Actions — row 2: secondary */}
+      <div className="flex gap-2 px-5 pb-3 mt-2">
+        <button
+          onClick={() => onDocuments(teacher)}
+          className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border border-emerald-100 dark:border-emerald-800 transition-colors"
+        >
+          <FileText size={11} /> Documents
+        </button>
+        <button
+          onClick={() => onCredentials(teacher)}
+          className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[11px] font-semibold text-violet-700 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 hover:bg-violet-100 dark:hover:bg-violet-900/40 border border-violet-100 dark:border-violet-800 transition-colors"
+        >
+          <KeyRound size={11} /> Credentials
+        </button>
+      </div>
     </div>
   );
 }
@@ -227,6 +242,7 @@ export default function TeachersPage() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [showImport,   setShowImport]   = useState(false);
   const [newCredentials, setNewCredentials] = useState(null);
+  const [credentialView, setCredentialView] = useState(null); // { teacher, credentials }
 
   // Reset page when filters change
   useEffect(() => { setPage(1); }, [search, statusFilter]);
@@ -272,6 +288,21 @@ export default function TeachersPage() {
       toast.success('Teacher deleted');
       setDeleteTarget(null); fetchTeachers();
     } catch (err) { toast.error(err.displayMessage || 'Failed to delete'); }
+  };
+
+  const handleShowCredentials = async (teacher) => {
+    try {
+      const r    = await getTeacherCredentials(teacher.id);
+      const data = r.data?.data ?? r.data;
+      if (!data?.username) { toast.error('No account found for this teacher'); return; }
+      const credentials = {
+        username: data.username,
+        note: data.must_change_password
+          ? 'Password has not been changed yet. Use Reset Credentials to issue a new password.'
+          : `Last login: ${data.last_login_at ? new Date(data.last_login_at).toLocaleDateString('en-PK') : 'Never'}`,
+      };
+      setCredentialView({ teacher, credentials });
+    } catch { toast.error('Could not load credentials'); }
   };
 
   const total    = teachers.length;
@@ -399,6 +430,8 @@ export default function TeachersPage() {
                   onEdit={t => { setEditTarget(t); setModalOpen(true); }}
                   onDelete={t => setDeleteTarget(t)}
                   onView={t => navigate(`/teachers/${t.id}`)}
+                  onDocuments={t => navigate(`/teachers/${t.id}/documents`)}
+                  onCredentials={handleShowCredentials}
                 />
               ))}
             </div>
@@ -440,6 +473,14 @@ export default function TeachersPage() {
           teacher={newCredentials.teacher}
           credentials={newCredentials.credentials}
           onClose={() => setNewCredentials(null)}
+        />
+      )}
+
+      {credentialView && (
+        <CredentialCard
+          teacher={credentialView.teacher}
+          credentials={credentialView.credentials}
+          onClose={() => setCredentialView(null)}
         />
       )}
     </Layout>

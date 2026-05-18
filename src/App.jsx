@@ -111,6 +111,9 @@ const DriverTrackingPage     = lazy(() => import('./pages/DriverTrackingPage'));
 const ChatPage               = lazy(() => import('./pages/ChatPage'));
 const RolesPage              = lazy(() => import('./pages/RolesPage'));
 const StudentLifecyclePage   = lazy(() => import('./pages/StudentLifecyclePage'));
+const FeeLedgerPage          = lazy(() => import('./pages/FeeLedgerPage'));
+const FeeReceiptVerifyPage   = lazy(() => import('./pages/FeeReceiptVerifyPage'));
+const TeacherDocumentPage    = lazy(() => import('./pages/TeacherDocumentPage'));
 /* Redirect / → role-appropriate home */
 function RoleRedirect() {
   const { user } = useAuth();
@@ -203,6 +206,11 @@ export default function App() {
             <Route path="/teachers/:id/print" element={
               <ProtectedRoute roles={['admin']}>
                 <TeacherDetailPrintPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/teachers/:id/documents" element={
+              <ProtectedRoute roles={['admin']}>
+                <TeacherDocumentPage />
               </ProtectedRoute>
             } />
             <Route path="/classes" element={
@@ -340,6 +348,13 @@ export default function App() {
                 <FeeMonthlySlipPage />
               </ProtectedRoute>
             } />
+            <Route path="/fees/ledger/:studentId" element={
+              <ProtectedRoute roles={['admin','teacher']}>
+                <FeeLedgerPage />
+              </ProtectedRoute>
+            } />
+            {/* Public receipt verification — no auth required */}
+            <Route path="/verify-receipt/:receiptNo" element={<FeeReceiptVerifyPage />} />
             <Route path="/salary" element={
               <ProtectedRoute roles={['admin']}>
                 <SalaryPage />

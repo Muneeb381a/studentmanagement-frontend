@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Banknote, CheckCircle2, Clock, AlertTriangle,
   Download, CreditCard, X, ExternalLink, Receipt,
@@ -121,8 +122,10 @@ function PayNowModal({ invoice, settings, onClose }) {
 
 /* ── Main Page ── */
 export default function ParentFeeLedgerPage() {
-  const { user }   = useAuth();
-  const childId    = user.entity_id;
+  const { user }        = useAuth();
+  const [searchParams]  = useSearchParams();
+  // Multi-child: prefer ?student_id= param, fall back to entity_id
+  const childId = parseInt(searchParams.get('student_id') || '') || user.entity_id;
 
   const [account,  setAccount]  = useState(null);
   const [settings, setSettings] = useState(null);

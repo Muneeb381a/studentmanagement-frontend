@@ -20,8 +20,19 @@ import {
   getOutstandingBalances, getDashboardStats, getExportURL,
   getConcessions, saveConcession, deleteConcession, applyLateFees,
   sendFeeReminders, getSiblingGroups, getSiblingVoucher,
+  getClassFeeCollection,
 } from '../api/fees';
 import { getSettings } from '../api/settings';
+import {
+  getLateRules, createLateRule, updateLateRule, deleteLateRule, runLateFeeEngine,
+  getFeePolicy, upsertFeePolicy,
+  getAdjustments, createAdjustment, approveAdjustment, rejectAdjustment,
+  getDefaultersList, getDefaulterActions, addDefaulterAction,
+} from '../api/feeAdvanced';
+import FeeAnalyticsPage from './FeeAnalyticsPage';
+
+const PKR = (n) =>
+  'PKR ' + Number(n || 0).toLocaleString('en-PK', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
 // ── Constants ─────────────────────────────────────────────────
 const STATUS_CONFIG = {
@@ -1893,13 +1904,15 @@ function SetupTab({ classes }) {
 
 // ── Tab: Reports ───────────────────────────────────────────────
 function ReportsTab({ classes }) {
-  const [monthFrom, setMonthFrom] = useState(currentMonth());
-  const [monthTo,   setMonthTo]   = useState(currentMonth());
-  const [classId,   setClassId]   = useState('');
-  const [summary,   setSummary]   = useState([]);
-  const [outstanding, setOut]     = useState([]);
-  const [tab,       setTab]       = useState('monthly');
-  const [loading,   setLoading]   = useState(false);
+  const [monthFrom,    setMonthFrom]    = useState(currentMonth());
+  const [monthTo,      setMonthTo]      = useState(currentMonth());
+  const [classId,      setClassId]      = useState('');
+  const [summary,      setSummary]      = useState([]);
+  const [outstanding,  setOut]          = useState([]);
+  const [classColl,    setClassColl]    = useState([]);
+  const [tab,          setTab]          = useState('monthly');
+  const [loading,      setLoading]      = useState(false);
+  const [ccLoading,    setCcLoading]    = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1913,6 +1926,15 @@ function ReportsTab({ classes }) {
     } catch { toast.error('Failed to load report'); }
     finally { setLoading(false); }
   }, [monthFrom, monthTo, classId]);
+
+  const loadClassCollection = useCallback(async () => {
+    setCcLoading(true);
+    try {
+      const res = await getClassFeeCollection(monthFrom);
+      setClassColl(Array.isArray(res.data) ? res.data : (res.data?.data ?? []));
+    } catch { toast.error('Failed to load class collection report'); }
+    finally { setCcLoading(false); }
+  }, [monthFrom]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -1977,8 +1999,8 @@ function ReportsTab({ classes }) {
 
       {/* Sub-tabs */}
       <div className="flex gap-2">
-        {[['monthly','Monthly Summary'],['outstanding','Outstanding Balances']].map(([k, l]) => (
-          <button key={k} onClick={() => setTab(k)}
+        {[['monthly','Monthly Summary'],['outstanding','Outstanding Balances'],['class-collection','Class Collection']].map(([k, l]) => (
+          <button key={k} onClick={() => { setTab(k); if (k === 'class-collection') loadClassCollection(); }}
             className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${tab === k ? 'text-white shadow-md' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
             style={tab === k ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' } : {}}>
             {l}
@@ -2077,6 +2099,66 @@ function ReportsTab({ classes }) {
                 ))}
               </tbody>
             </table>
+          )}
+        </div>
+      ) : tab === 'class-collection' && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Class-wise Collection — {monthFrom}</span>
+            <button onClick={loadClassCollection} disabled={ccLoading}
+              className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800">
+              <RefreshCw size={13} className={ccLoading ? 'animate-spin' : ''} />
+            </button>
+          </div>
+          {ccLoading ? (
+            <div className="p-12 flex justify-center"><div className="w-8 h-8 border-2 border-t-indigo-600 border-indigo-200 rounded-full animate-spin" /></div>
+          ) : classColl.length === 0 ? (
+            <div className="p-12 text-center text-slate-400 text-sm">No data for {monthFrom}</div>
+          ) : (
+            <>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700">
+                    {['Class','Section','Students','Billed','Collected','Outstanding','Rate'].map(h => (
+                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {classColl.map((r, i) => {
+                    const rate = r.total_billed > 0 ? Math.round((r.total_collected / r.total_billed) * 100) : 0;
+                    return (
+                      <tr key={i} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/60 dark:hover:bg-slate-800/30">
+                        <td className="px-4 py-3 font-semibold text-slate-800 dark:text-slate-100">{r.class_name}</td>
+                        <td className="px-4 py-3 text-slate-500 text-xs">{r.section || '—'}</td>
+                        <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{r.total_students}</td>
+                        <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">Rs. {fmt(r.total_billed)}</td>
+                        <td className="px-4 py-3 font-semibold text-emerald-600">Rs. {fmt(r.total_collected)}</td>
+                        <td className="px-4 py-3 font-bold text-red-600">Rs. {fmt(r.outstanding)}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 bg-slate-100 dark:bg-slate-700 rounded-full h-1.5 w-20">
+                              <div className="h-1.5 rounded-full transition-all"
+                                style={{ width: `${Math.min(rate, 100)}%`, background: rate >= 80 ? '#16a34a' : rate >= 50 ? '#d97706' : '#dc2626' }} />
+                            </div>
+                            <span className="text-xs font-semibold" style={{ color: rate >= 80 ? '#16a34a' : rate >= 50 ? '#d97706' : '#dc2626' }}>{rate}%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-slate-50 dark:bg-slate-800 border-t-2 border-slate-200 dark:border-slate-700">
+                    <td colSpan={3} className="px-4 py-3 font-bold text-slate-700 dark:text-slate-200 text-xs uppercase">Total</td>
+                    <td className="px-4 py-3 font-bold text-slate-700 dark:text-slate-200">Rs. {fmt(classColl.reduce((a,r) => a + parseFloat(r.total_billed||0), 0))}</td>
+                    <td className="px-4 py-3 font-bold text-emerald-600">Rs. {fmt(classColl.reduce((a,r) => a + parseFloat(r.total_collected||0), 0))}</td>
+                    <td className="px-4 py-3 font-bold text-red-600">Rs. {fmt(classColl.reduce((a,r) => a + parseFloat(r.outstanding||0), 0))}</td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </>
           )}
         </div>
       )}
@@ -2320,6 +2402,11 @@ export default function FeesPage() {
     { key: 'setup',       label: 'Fee Setup',    icon: Settings2    },
     { key: 'reports',     label: 'Reports',      icon: BarChart3    },
     { key: 'siblings',    label: 'Siblings',     icon: Users2       },
+    { key: 'analytics',   label: 'Analytics',    icon: TrendingUp   },
+    { key: 'adjustments', label: 'Adjustments',  icon: Zap          },
+    { key: 'defaulters',  label: 'Defaulters',   icon: AlertTriangle},
+    { key: 'late-rules',  label: 'Late Rules',   icon: Clock3       },
+    { key: 'policy',      label: 'Policy',       icon: Settings2    },
   ];
 
   return (
@@ -2392,7 +2479,786 @@ export default function FeesPage() {
         {tab === 'setup'       && <SetupTab       classes={classes} />}
         {tab === 'reports'     && <ReportsTab     classes={classes} />}
         {tab === 'siblings'    && <SiblingsTab />}
+        {tab === 'analytics'   && <FeeAnalyticsPage />}
+        {tab === 'adjustments' && <AdjustmentsTab />}
+        {tab === 'defaulters'  && <DefaultersWorkflowTab />}
+        {tab === 'late-rules'  && <LateRulesTab />}
+        {tab === 'policy'      && <PolicyTab />}
       </div>
     </Layout>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ADJUSTMENTS TAB  (Waiver / Refund / Correction workflow)
+// ═══════════════════════════════════════════════════════════════
+function AdjustmentsTab() {
+  const [items,       setItems]       = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [status,      setStatus]      = useState('pending');
+  const [form,        setForm]        = useState(null);
+  const [saving,      setSaving]      = useState(false);
+  const [stuQuery,    setStuQuery]    = useState('');
+  const [stuResults,  setStuResults]  = useState([]);
+  const [stuLoading,  setStuLoading]  = useState(false);
+  const [stuInvoices, setStuInvoices] = useState([]);
+  const debRef = useRef(null);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const r = await getAdjustments({ status: status !== 'all' ? status : undefined });
+      setItems((r.data?.data ?? r.data) || []);
+    } catch { toast.error('Failed to load adjustments'); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, [status]);
+
+  useEffect(() => {
+    if (!form) { setStuQuery(''); setStuResults([]); setStuInvoices([]); return; }
+  }, [form]);
+
+  const searchStudents = (q) => {
+    setStuQuery(q);
+    clearTimeout(debRef.current);
+    if (!q.trim()) { setStuResults([]); return; }
+    debRef.current = setTimeout(async () => {
+      setStuLoading(true);
+      try {
+        const r = await getStudents({ search: q, limit: 8 });
+        setStuResults(Array.isArray(r.data) ? r.data : []);
+      } catch { setStuResults([]); }
+      finally { setStuLoading(false); }
+    }, 280);
+  };
+
+  const pickStudent = async (stu) => {
+    setStuQuery(stu.full_name);
+    setStuResults([]);
+    try {
+      const r = await getInvoices({ student_id: stu.id, limit: 50 });
+      const invs = (Array.isArray(r.data) ? r.data : []).filter(i => i.status !== 'cancelled' && i.status !== 'paid');
+      setStuInvoices(invs);
+    } catch { setStuInvoices([]); }
+  };
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await createAdjustment(form);
+      toast.success('Adjustment request submitted');
+      setForm(null);
+      load();
+    } catch (err) { toast.error(err.response?.data?.message || 'Failed'); }
+    finally { setSaving(false); }
+  };
+
+  const handleApprove = async (id) => {
+    if (!window.confirm('Approve and apply this adjustment?')) return;
+    try {
+      await approveAdjustment(id, {});
+      toast.success('Adjustment approved and applied');
+      load();
+    } catch (err) { toast.error(err.response?.data?.message || 'Failed'); }
+  };
+
+  const handleReject = async (id) => {
+    const notes = window.prompt('Rejection reason (optional):');
+    if (notes === null) return;
+    try {
+      await rejectAdjustment(id, { notes });
+      toast.success('Adjustment rejected');
+      load();
+    } catch (err) { toast.error(err.response?.data?.message || 'Failed'); }
+  };
+
+  const TYPE_COLORS = {
+    waiver:      'bg-sky-100 text-sky-700',
+    refund:      'bg-purple-100 text-purple-700',
+    correction:  'bg-amber-100 text-amber-700',
+    fine_waiver: 'bg-orange-100 text-orange-700',
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex gap-2">
+          {['pending','approved','rejected','all'].map(s => (
+            <button key={s} onClick={() => setStatus(s)}
+              className={`px-3 py-1.5 text-xs rounded-lg font-medium capitalize transition-colors ${
+                status === s ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600'
+              }`}>
+              {s}
+            </button>
+          ))}
+        </div>
+        <button onClick={() => setForm({ invoice_id: '', type: 'waiver', amount: '', reason: '' })}
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-lg">
+          <Plus size={14} /> New Request
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-16"><div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" /></div>
+      ) : items.length === 0 ? (
+        <div className="text-center py-16 text-slate-400 text-sm">No {status} adjustments</div>
+      ) : (
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 dark:bg-slate-700/50">
+              <tr>
+                {['Student','Invoice','Type','Amount','Reason','Status','Requested','Actions'].map(h => (
+                  <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50 dark:divide-slate-700">
+              {items.map(item => (
+                <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30">
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-slate-700 dark:text-slate-200">{item.student_name}</p>
+                    <p className="text-xs text-slate-400">{item.roll_number} · {item.class_name}</p>
+                  </td>
+                  <td className="px-4 py-3 text-xs font-mono text-slate-500">{item.invoice_no}</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${TYPE_COLORS[item.type] || 'bg-slate-100 text-slate-600'}`}>
+                      {item.type.replace('_', ' ')}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">{PKR(item.amount)}</td>
+                  <td className="px-4 py-3 text-slate-500 max-w-[200px] truncate" title={item.reason}>{item.reason}</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold capitalize
+                      ${item.status === 'approved' ? 'bg-green-100 text-green-700' :
+                        item.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                        'bg-amber-100 text-amber-700'}`}>
+                      {item.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-slate-400">
+                    {new Date(item.requested_at).toLocaleDateString()}
+                    {item.requested_by_name && <div>{item.requested_by_name}</div>}
+                  </td>
+                  <td className="px-4 py-3">
+                    {item.status === 'pending' && (
+                      <div className="flex gap-1">
+                        <button onClick={() => handleApprove(item.id)}
+                          className="px-2.5 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg">
+                          Approve
+                        </button>
+                        <button onClick={() => handleReject(item.id)}
+                          className="px-2.5 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded-lg">
+                          Reject
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Create form modal */}
+      {form && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-800 dark:text-white">New Adjustment Request</h3>
+              <button onClick={() => setForm(null)}><X size={16} className="text-slate-400" /></button>
+            </div>
+            <form onSubmit={handleCreate} className="space-y-3">
+              {/* Student search → Invoice picker */}
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Search Student</label>
+                <div className="relative">
+                  <input type="text" placeholder="Type student name…" value={stuQuery}
+                    onChange={e => searchStudents(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200" />
+                  {stuLoading && <div className="absolute right-3 top-2.5 w-4 h-4 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />}
+                  {stuResults.length > 0 && (
+                    <div className="absolute z-50 top-full mt-1 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden">
+                      {stuResults.map(s => (
+                        <button key={s.id} type="button" onClick={() => pickStudent(s)}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200">
+                          {s.full_name} <span className="text-xs text-slate-400">({s.roll_number})</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Invoice *</label>
+                <select required value={form.invoice_id}
+                  onChange={e => setForm(f => ({ ...f, invoice_id: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200">
+                  <option value="">Select invoice…</option>
+                  {stuInvoices.map(i => (
+                    <option key={i.id} value={i.id}>{i.invoice_no} — Rs.{fmt(i.net_amount || i.total_amount)} ({i.billing_month || i.invoice_type})</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Type</label>
+                <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200">
+                  <option value="waiver">Waiver (reduce amount owed)</option>
+                  <option value="fine_waiver">Fine Waiver (remove late fee)</option>
+                  <option value="correction">Correction (fix billing error)</option>
+                  <option value="refund">Refund (return paid amount)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Amount (PKR)</label>
+                <input type="number" step="0.01" required min="0.01" value={form.amount}
+                  onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Reason *</label>
+                <textarea required value={form.reason} rows={3}
+                  onChange={e => setForm(f => ({ ...f, reason: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 resize-none" />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button type="submit" disabled={saving}
+                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg">
+                  {saving ? 'Submitting…' : 'Submit Request'}
+                </button>
+                <button type="button" onClick={() => setForm(null)}
+                  className="px-4 py-2.5 border border-slate-200 dark:border-slate-600 text-sm rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  DEFAULTERS WORKFLOW TAB
+// ═══════════════════════════════════════════════════════════════
+function DefaultersWorkflowTab() {
+  const [defaulters, setDefaulters] = useState([]);
+  const [actions,    setActions]    = useState({});
+  const [loading,    setLoading]    = useState(true);
+  const [expanded,   setExpanded]   = useState(null);
+  const [actionForm, setActionForm] = useState(null);
+
+  const ACTION_TYPES = [
+    { value: 'notice_sent',  label: 'Notice Sent' },
+    { value: 'parent_called',label: 'Parent Called' },
+    { value: 'sms_sent',     label: 'SMS Sent' },
+    { value: 'email_sent',   label: 'Email Sent' },
+    { value: 'escalated',    label: 'Escalated' },
+    { value: 'resolved',     label: 'Resolved' },
+    { value: 'other',        label: 'Other' },
+  ];
+
+  const ACTION_COLORS = {
+    notice_sent:   'bg-blue-100 text-blue-700',
+    parent_called: 'bg-purple-100 text-purple-700',
+    sms_sent:      'bg-indigo-100 text-indigo-700',
+    email_sent:    'bg-cyan-100 text-cyan-700',
+    escalated:     'bg-red-100 text-red-700',
+    resolved:      'bg-green-100 text-green-700',
+    other:         'bg-slate-100 text-slate-600',
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const r = await getDefaultersList({});
+      setDefaulters((r.data?.data ?? r.data) || []);
+    } catch { toast.error('Failed to load defaulters'); }
+    finally { setLoading(false); }
+  };
+
+  const loadActions = async (studentId) => {
+    try {
+      const r = await getDefaulterActions({ student_id: studentId });
+      setActions(p => ({ ...p, [studentId]: (r.data?.data ?? r.data) || [] }));
+    } catch { /* silent */ }
+  };
+
+  const toggleExpand = (id) => {
+    setExpanded(e => e === id ? null : id);
+    if (expanded !== id) loadActions(id);
+  };
+
+  const handleAddAction = async (e) => {
+    e.preventDefault();
+    try {
+      await addDefaulterAction(actionForm);
+      toast.success('Action logged');
+      setActionForm(null);
+      loadActions(actionForm.student_id);
+      load();
+    } catch (err) { toast.error(err.response?.data?.message || 'Failed'); }
+  };
+
+  const urgencyColor = (days) => {
+    if (days > 60) return 'text-red-600 bg-red-50 dark:bg-red-900/20';
+    if (days > 30) return 'text-orange-600 bg-orange-50 dark:bg-orange-900/20';
+    return 'text-amber-600 bg-amber-50 dark:bg-amber-900/20';
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-slate-700 dark:text-slate-200">
+          Fee Defaulters
+          {defaulters.length > 0 && <span className="ml-2 text-sm font-normal text-slate-400">({defaulters.length})</span>}
+        </h3>
+        <button onClick={load} className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">
+          <RefreshCw size={13} /> Refresh
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-16"><div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" /></div>
+      ) : defaulters.length === 0 ? (
+        <div className="text-center py-16 text-slate-400 text-sm">
+          <CheckCircle2 size={32} className="mx-auto mb-3 text-green-400" />
+          No defaulters found
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {defaulters.map(d => (
+            <div key={d.student_id} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden">
+              <div className="flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/30"
+                onClick={() => toggleExpand(d.student_id)}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-slate-800 dark:text-white text-sm truncate">{d.full_name}</p>
+                    <span className="text-xs text-slate-400">{d.roll_number}</span>
+                    <span className="text-xs text-slate-400">·</span>
+                    <span className="text-xs text-slate-500">{d.class_name}</span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-sm font-bold text-red-600 dark:text-red-400">{PKR(d.total_owed)}</span>
+                    {d.days_overdue != null && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${urgencyColor(d.days_overdue)}`}>
+                        {d.days_overdue}d overdue
+                      </span>
+                    )}
+                    {d.last_action && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${ACTION_COLORS[d.last_action] || 'bg-slate-100 text-slate-500'}`}>
+                        {d.last_action.replace('_', ' ')}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button onClick={(e) => { e.stopPropagation(); setActionForm({ student_id: d.student_id, action_type: 'parent_called', notes: '', amount_owed: d.total_owed }); }}
+                  className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shrink-0">
+                  + Action
+                </button>
+                <ChevronDown size={16} className={`text-slate-400 shrink-0 transition-transform ${expanded === d.student_id ? 'rotate-180' : ''}`} />
+              </div>
+
+              {expanded === d.student_id && (
+                <div className="px-4 pb-3 border-t border-slate-50 dark:border-slate-700">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mt-3 mb-2">Action History</p>
+                  {!actions[d.student_id] ? (
+                    <p className="text-xs text-slate-400">Loading…</p>
+                  ) : actions[d.student_id].length === 0 ? (
+                    <p className="text-xs text-slate-400">No actions taken yet</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {actions[d.student_id].map(a => (
+                        <div key={a.id} className="flex items-start gap-2 text-xs">
+                          <span className={`mt-0.5 px-2 py-0.5 rounded-full font-semibold capitalize shrink-0 ${ACTION_COLORS[a.action_type] || 'bg-slate-100 text-slate-500'}`}>
+                            {a.action_type.replace('_', ' ')}
+                          </span>
+                          <span className="text-slate-500 dark:text-slate-400">{a.notes || '—'}</span>
+                          <span className="text-slate-300 dark:text-slate-600 ml-auto shrink-0">
+                            {new Date(a.taken_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add action modal */}
+      {actionForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-800 dark:text-white">Log Action</h3>
+              <button onClick={() => setActionForm(null)}><X size={16} className="text-slate-400" /></button>
+            </div>
+            <form onSubmit={handleAddAction} className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Action Type</label>
+                <select value={actionForm.action_type}
+                  onChange={e => setActionForm(f => ({ ...f, action_type: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200">
+                  {ACTION_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Notes</label>
+                <textarea rows={3} value={actionForm.notes}
+                  onChange={e => setActionForm(f => ({ ...f, notes: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 resize-none" />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button type="submit"
+                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg">
+                  Save Action
+                </button>
+                <button type="button" onClick={() => setActionForm(null)}
+                  className="px-4 py-2.5 border border-slate-200 dark:border-slate-600 text-sm rounded-lg text-slate-600 dark:text-slate-300">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  LATE RULES TAB
+// ═══════════════════════════════════════════════════════════════
+function LateRulesTab() {
+  const [rules,   setRules]   = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [form,    setForm]    = useState(null);
+  const [saving,  setSaving]  = useState(false);
+  const [running, setRunning] = useState(false);
+
+  const BLANK = { name: '', applies_to: 'all', class_id: '', grade: '',
+                  grace_days: 0, fine_type: 'percent', fine_value: '', max_fine: '',
+                  recurs: false, recur_days: '', is_active: true };
+
+  useEffect(() => { load(); }, []);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const r = await getLateRules();
+      setRules((r.data?.data ?? r.data) || []);
+    } catch { toast.error('Failed to load rules'); }
+    finally { setLoading(false); }
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      if (form.id) {
+        await updateLateRule(form.id, form);
+      } else {
+        await createLateRule(form);
+      }
+      toast.success(form.id ? 'Rule updated' : 'Rule created');
+      setForm(null);
+      load();
+    } catch (err) { toast.error(err.response?.data?.message || 'Failed'); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this rule?')) return;
+    try { await deleteLateRule(id); toast.success('Deleted'); load(); }
+    catch (err) { toast.error(err.response?.data?.message || 'Failed'); }
+  };
+
+  const handleRun = async (dry = true) => {
+    setRunning(true);
+    try {
+      const r = await runLateFeeEngine({ dry_run: dry });
+      const d = r.data?.data ?? r.data;
+      if (dry) {
+        toast.success(`Dry run: ${d?.updated || 0} invoice(s) would be updated`);
+      } else {
+        toast.success(d?.message || `${d?.updated || 0} invoices updated`);
+      }
+    } catch (err) { toast.error(err.response?.data?.message || 'Engine failed'); }
+    finally { setRunning(false); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-slate-700 dark:text-slate-200">Smart Late Fee Rules</h3>
+        <div className="flex gap-2">
+          <button onClick={() => handleRun(true)} disabled={running}
+            className="px-3 py-1.5 text-xs border border-amber-300 dark:border-amber-600 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg hover:bg-amber-100 disabled:opacity-50">
+            Dry Run
+          </button>
+          <button onClick={() => { if(window.confirm('Apply late fee rules to all overdue invoices now?')) handleRun(false); }}
+            disabled={running}
+            className="px-3 py-1.5 text-xs bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white rounded-lg">
+            {running ? 'Running…' : 'Run Engine'}
+          </button>
+          <button onClick={() => setForm({ ...BLANK })}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg">
+            <Plus size={12} /> New Rule
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-4 py-3 text-xs text-amber-700 dark:text-amber-300">
+        Rules are evaluated in order. The most specific matching rule (by class or grade) wins.
+        Use "Dry Run" to preview before applying.
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-16"><div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" /></div>
+      ) : rules.length === 0 ? (
+        <div className="text-center py-16 text-slate-400 text-sm">No rules yet. Create one to automate late fees.</div>
+      ) : (
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 dark:bg-slate-700/50">
+              <tr>
+                {['Name','Applies To','Grace','Fine','Max Fine','Recurs','Status',''].map(h => (
+                  <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50 dark:divide-slate-700">
+              {rules.map(r => (
+                <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30">
+                  <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-200">{r.name}</td>
+                  <td className="px-4 py-3 text-slate-500 capitalize">{r.applies_to}{r.class_name ? ` — ${r.class_name}` : r.grade ? ` — Grade ${r.grade}` : ''}</td>
+                  <td className="px-4 py-3 text-slate-500">{r.grace_days}d</td>
+                  <td className="px-4 py-3 font-medium text-orange-600">
+                    {r.fine_type === 'percent' ? `${r.fine_value}%` : PKR(r.fine_value)}
+                  </td>
+                  <td className="px-4 py-3 text-slate-400">{r.max_fine ? PKR(r.max_fine) : '—'}</td>
+                  <td className="px-4 py-3 text-slate-400">{r.recurs ? `Every ${r.recur_days}d` : 'Once'}</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${r.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+                      {r.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1">
+                      <button onClick={() => setForm({ ...r })}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20">
+                        <Pencil size={13} />
+                      </button>
+                      <button onClick={() => handleDelete(r.id)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {form && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-800 dark:text-white">{form.id ? 'Edit Rule' : 'New Late Fee Rule'}</h3>
+              <button onClick={() => setForm(null)}><X size={16} className="text-slate-400" /></button>
+            </div>
+            <form onSubmit={handleSave} className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-slate-500 mb-1">Rule Name *</label>
+                <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Applies To</label>
+                <select value={form.applies_to} onChange={e => setForm(f => ({ ...f, applies_to: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200">
+                  <option value="all">All Students</option>
+                  <option value="class">Specific Class</option>
+                  <option value="grade">Specific Grade</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Grace Period (days)</label>
+                <input type="number" min="0" value={form.grace_days}
+                  onChange={e => setForm(f => ({ ...f, grace_days: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Fine Type</label>
+                <select value={form.fine_type} onChange={e => setForm(f => ({ ...f, fine_type: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200">
+                  <option value="percent">Percentage of Invoice</option>
+                  <option value="fixed">Fixed Amount (PKR)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Fine Value *</label>
+                <input type="number" step="0.01" required min="0.01" value={form.fine_value}
+                  onChange={e => setForm(f => ({ ...f, fine_value: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Max Fine (PKR, optional)</label>
+                <input type="number" step="0.01" value={form.max_fine}
+                  onChange={e => setForm(f => ({ ...f, max_fine: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200" />
+              </div>
+              <div className="col-span-2 flex items-center gap-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={form.recurs}
+                    onChange={e => setForm(f => ({ ...f, recurs: e.target.checked }))}
+                    className="rounded" />
+                  <span className="text-sm text-slate-600 dark:text-slate-300">Recurring fine</span>
+                </label>
+                {form.recurs && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500">every</span>
+                    <input type="number" min="1" value={form.recur_days}
+                      onChange={e => setForm(f => ({ ...f, recur_days: e.target.value }))}
+                      className="w-16 px-2 py-1.5 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200" />
+                    <span className="text-xs text-slate-500">days</span>
+                  </div>
+                )}
+              </div>
+              <div className="col-span-2 flex items-center gap-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={form.is_active}
+                    onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))}
+                    className="rounded" />
+                  <span className="text-sm text-slate-600 dark:text-slate-300">Active</span>
+                </label>
+              </div>
+              <div className="col-span-2 flex gap-2 pt-2">
+                <button type="submit" disabled={saving}
+                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg">
+                  {saving ? 'Saving…' : (form.id ? 'Update Rule' : 'Create Rule')}
+                </button>
+                <button type="button" onClick={() => setForm(null)}
+                  className="px-4 py-2.5 border border-slate-200 dark:border-slate-600 text-sm rounded-lg text-slate-600 dark:text-slate-300">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  POLICY TAB
+// ═══════════════════════════════════════════════════════════════
+function PolicyTab() {
+  const [policy,  setPolicy]  = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving,  setSaving]  = useState(false);
+  const [year,    setYear]    = useState(currentAcademicYear());
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const r = await getFeePolicy(year);
+      setPolicy(r.data?.data ?? r.data);
+    } catch { toast.error('Failed to load policy'); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, [year]);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await upsertFeePolicy(year, policy);
+      toast.success('Policy saved');
+    } catch (err) { toast.error(err.response?.data?.message || 'Failed'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="max-w-2xl space-y-6">
+      <div className="flex items-center gap-3">
+        <label className="block text-xs font-medium text-slate-500">Academic Year</label>
+        <select value={year} onChange={e => setYear(e.target.value)}
+          className="px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200">
+          {ACADEMIC_YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-16"><div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" /></div>
+      ) : policy && (
+        <form onSubmit={handleSave} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-6 space-y-5 shadow-sm">
+          <h3 className="font-semibold text-slate-700 dark:text-slate-200">Fee Policy — {year}</h3>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">
+              Auto-Generate Day of Month
+              <span className="ml-1 text-slate-400">(1–28)</span>
+            </label>
+            <input type="number" min="1" max="28" value={policy.auto_generate_day || 1}
+              onChange={e => setPolicy(p => ({ ...p, auto_generate_day: e.target.value }))}
+              className="w-24 px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200" />
+            <p className="text-xs text-slate-400 mt-1">Fees will be auto-generated on this day each month</p>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <input type="checkbox" id="carry_forward" checked={policy.carry_forward || false}
+              onChange={e => setPolicy(p => ({ ...p, carry_forward: e.target.checked }))}
+              className="rounded mt-0.5" />
+            <div>
+              <label htmlFor="carry_forward" className="text-sm font-medium text-slate-700 dark:text-slate-200 cursor-pointer">
+                Carry Forward Unpaid Balances
+              </label>
+              <p className="text-xs text-slate-400 mt-0.5">
+                When generating monthly fees, add previous unpaid amounts as an "Arrears" line item
+              </p>
+            </div>
+          </div>
+
+          {policy.carry_forward && (
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Arrears Label</label>
+              <input value={policy.carry_forward_label || 'Arrears'}
+                onChange={e => setPolicy(p => ({ ...p, carry_forward_label: e.target.value }))}
+                className="w-full max-w-xs px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200" />
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">
+              Invoice Lock After Days
+              <span className="ml-1 text-slate-400">(leave blank = never lock)</span>
+            </label>
+            <input type="number" min="1" value={policy.lock_after_days || ''}
+              onChange={e => setPolicy(p => ({ ...p, lock_after_days: e.target.value || null }))}
+              className="w-24 px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200" />
+            <p className="text-xs text-slate-400 mt-1">Invoices cannot be edited after this many days from month end</p>
+          </div>
+
+          <button type="submit" disabled={saving}
+            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg">
+            <Save size={14} /> {saving ? 'Saving…' : 'Save Policy'}
+          </button>
+        </form>
+      )}
+    </div>
   );
 }

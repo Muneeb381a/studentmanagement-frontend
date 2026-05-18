@@ -12,7 +12,7 @@ import Avatar from '../components/ui/Avatar';
 import Badge from '../components/ui/Badge';
 import EmptyState from '../components/ui/EmptyState';
 import Button from '../components/ui/Button';
-import { getStudents, deleteStudent, resetStudentCredentials, promoteStudents, getStudentImportTemplate, importStudents, exportStudents } from '../api/students';
+import { getStudents, deleteStudent, resetStudentCredentials, promoteStudents, getStudentImportTemplate, importStudents, exportStudents, getParentCredentials, resetParentCredentials } from '../api/students';
 import Pagination from '../components/ui/Pagination';
 import { getClasses } from '../api/classes';
 import { useDebounce } from '../hooks/useDebounce';
@@ -20,13 +20,34 @@ import { formatDate, toPct, downloadBlob } from '../utils';
 
 /* ── Student Credential Reveal Modal ── */
 function StudentCredentialModal({ student, onClose }) {
-  const [loading, setLoading]   = useState(false);
-  const [creds,   setCreds]     = useState(null);
-  const [copied,  setCopied]    = useState('');
+  const [tab,           setTab]           = useState('student'); // 'student' | 'parent'
+  const [loading,       setLoading]       = useState(false);
+  const [creds,         setCreds]         = useState(null);
+  const [copied,        setCopied]        = useState('');
+  // parent tab
+  const [parentInfo,    setParentInfo]    = useState(null);  // existing parent account info
+  const [parentLoading, setParentLoading] = useState(false);
+  const [parentReset,   setParentReset]   = useState(null);  // new credentials after reset
+  const [pCopied,       setPCopied]       = useState('');
+
+  // Load parent account info when parent tab is first opened
+  useEffect(() => {
+    if (tab !== 'parent' || parentInfo !== null) return;
+    setParentLoading(true);
+    getParentCredentials(student.id)
+      .then(r => setParentInfo(r.data || r))
+      .catch(() => setParentInfo(false))
+      .finally(() => setParentLoading(false));
+  }, [tab, student.id, parentInfo]);
 
   const copy = (text, key) => {
     navigator.clipboard.writeText(text).then(() => {
       setCopied(key); setTimeout(() => setCopied(''), 2000);
+    });
+  };
+  const pcopy = (text, key) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setPCopied(key); setTimeout(() => setPCopied(''), 2000);
     });
   };
 
@@ -40,6 +61,26 @@ function StudentCredentialModal({ student, onClose }) {
       toast.error(err.response?.data?.message || 'Reset failed');
     } finally { setLoading(false); }
   };
+
+  const handleParentReset = async () => {
+    setParentLoading(true);
+    try {
+      const r = await resetParentCredentials(student.id);
+      const payload = r.data || r;
+      setParentReset(payload.credentials || payload);
+      setParentInfo(null); // force reload on next open
+      toast.success(payload.isNew ? 'Parent account created' : 'Parent password reset');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Reset failed');
+    } finally { setParentLoading(false); }
+  };
+
+  const tabCls = (t) =>
+    `flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${
+      tab === t
+        ? 'bg-indigo-600 text-white shadow-sm'
+        : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+    }`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -57,70 +98,177 @@ function StudentCredentialModal({ student, onClose }) {
           </div>
         </div>
 
-        <div className="p-5 space-y-4">
-          {creds ? (
-            <>
-              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-3 text-xs text-amber-700 dark:text-amber-400">
-                Save these credentials now — the password will <strong>not be shown again</strong>.
-              </div>
+        {/* Tab switcher */}
+        <div className="flex gap-1.5 px-5 pt-4 pb-0 bg-white dark:bg-slate-900">
+          <button className={tabCls('student')} onClick={() => setTab('student')}>Student</button>
+          <button className={tabCls('parent')} onClick={() => setTab('parent')}>Parent</button>
+        </div>
 
-              <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Username</p>
-                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5">
-                  <code className="flex-1 font-mono text-sm text-slate-800 dark:text-slate-200 select-all">{creds.username}</code>
-                  <button onClick={() => copy(creds.username, 'u')} className="text-slate-400 hover:text-indigo-600 transition-colors">
-                    {copied === 'u' ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
-                  </button>
-                </div>
-              </div>
-
-              {creds.tempPassword && (
-                <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Temporary Password</p>
-                  <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5">
-                    <code className="flex-1 font-mono text-sm text-slate-800 dark:text-slate-200 select-all">{creds.tempPassword}</code>
-                    <button onClick={() => copy(creds.tempPassword, 'p')} className="text-slate-400 hover:text-indigo-600 transition-colors">
-                      {copied === 'p' ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
-                    </button>
+        {/* ── Student tab ── */}
+        {tab === 'student' && (
+          <>
+            <div className="p-5 space-y-4">
+              {creds ? (
+                <>
+                  <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-3 text-xs text-amber-700 dark:text-amber-400">
+                    Save these credentials now — the password will <strong>not be shown again</strong>.
                   </div>
-                </div>
-              )}
-
-              {creds.emailSent && (
-                <p className="text-xs text-emerald-600 flex items-center gap-1">
-                  <ShieldCheck size={12} /> {creds.note}
+                  <div>
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Username</p>
+                    <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5">
+                      <code className="flex-1 font-mono text-sm text-slate-800 dark:text-slate-200 select-all">{creds.username}</code>
+                      <button onClick={() => copy(creds.username, 'u')} className="text-slate-400 hover:text-indigo-600 transition-colors">
+                        {copied === 'u' ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+                      </button>
+                    </div>
+                  </div>
+                  {creds.tempPassword && (
+                    <div>
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Temporary Password</p>
+                      <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5">
+                        <code className="flex-1 font-mono text-sm text-slate-800 dark:text-slate-200 select-all">{creds.tempPassword}</code>
+                        <button onClick={() => copy(creds.tempPassword, 'p')} className="text-slate-400 hover:text-indigo-600 transition-colors">
+                          {copied === 'p' ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {creds.emailSent && (
+                    <p className="text-xs text-emerald-600 flex items-center gap-1">
+                      <ShieldCheck size={12} /> {creds.note}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-slate-600 dark:text-slate-300 text-center py-2">
+                  Reset the password to view or share new credentials.
                 </p>
               )}
-            </>
-          ) : (
-            <p className="text-sm text-slate-600 dark:text-slate-300 text-center py-2">
-              Reset the password to view or share new credentials.
-            </p>
-          )}
-        </div>
+            </div>
+            <div className="flex gap-3 px-5 pb-5">
+              <button onClick={onClose} className="flex-1 py-2 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                Close
+              </button>
+              {!creds ? (
+                <button onClick={handleReset} disabled={loading}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-amber-500 text-white rounded-xl text-sm font-semibold hover:bg-amber-600 disabled:opacity-60 transition-colors">
+                  {loading ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
+                  {loading ? 'Resetting…' : 'Reset Password'}
+                </button>
+              ) : (
+                <button onClick={() => window.open(`/students/${student.id}/print?creds=1`, '_blank')}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors">
+                  <Printer size={14} /> Print
+                </button>
+              )}
+            </div>
+          </>
+        )}
 
-        <div className="flex gap-3 px-5 pb-5">
-          <button onClick={onClose} className="flex-1 py-2 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-            Close
-          </button>
-          {!creds ? (
-            <button
-              onClick={handleReset}
-              disabled={loading}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-amber-500 text-white rounded-xl text-sm font-semibold hover:bg-amber-600 disabled:opacity-60 transition-colors"
-            >
-              {loading ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
-              {loading ? 'Resetting…' : 'Reset Password'}
-            </button>
-          ) : (
-            <button
-              onClick={() => window.open(`/students/${student.id}/print?creds=1`, '_blank')}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors"
-            >
-              <Printer size={14} /> Print
-            </button>
-          )}
-        </div>
+        {/* ── Parent tab ── */}
+        {tab === 'parent' && (
+          <>
+            <div className="p-5 space-y-4">
+              {parentLoading && !parentReset ? (
+                <div className="flex items-center justify-center py-6 text-slate-400">
+                  <Loader2 size={20} className="animate-spin" />
+                </div>
+              ) : parentReset ? (
+                <>
+                  <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-3 text-xs text-amber-700 dark:text-amber-400">
+                    Save these now — the password will <strong>not be shown again</strong>.
+                  </div>
+                  {parentReset.children_count > 1 && (
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl p-3 text-xs text-blue-700 dark:text-blue-400 flex gap-2 items-start">
+                      <Users size={13} className="mt-0.5 shrink-0" />
+                      This account is shared by <strong>{parentReset.children_count} children</strong>. The same login accesses all of them.
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Username</p>
+                    <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5">
+                      <code className="flex-1 font-mono text-sm text-slate-800 dark:text-slate-200 select-all">{parentReset.username}</code>
+                      <button onClick={() => pcopy(parentReset.username, 'pu')} className="text-slate-400 hover:text-indigo-600 transition-colors">
+                        {pCopied === 'pu' ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+                      </button>
+                    </div>
+                  </div>
+                  {parentReset.tempPassword && (
+                    <div>
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Temporary Password</p>
+                      <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5">
+                        <code className="flex-1 font-mono text-sm text-slate-800 dark:text-slate-200 select-all">{parentReset.tempPassword}</code>
+                        <button onClick={() => pcopy(parentReset.tempPassword, 'pp')} className="text-slate-400 hover:text-indigo-600 transition-colors">
+                          {pCopied === 'pp' ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {parentReset.emailSent && (
+                    <p className="text-xs text-emerald-600 flex items-center gap-1">
+                      <ShieldCheck size={12} /> Credentials emailed to parent.
+                    </p>
+                  )}
+                </>
+              ) : parentInfo ? (
+                <>
+                  <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl p-3 space-y-2">
+                    <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                      <ShieldCheck size={13} /> Parent Account Active
+                    </p>
+                    <div className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">Username</span>
+                        <code className="font-mono font-medium">{parentInfo.username}</code>
+                      </div>
+                      {parentInfo.email && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400">Email</span>
+                          <span className="font-medium">{parentInfo.email}</span>
+                        </div>
+                      )}
+                      {parentInfo.children_count > 1 && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400">Linked children</span>
+                          <span className="font-semibold text-indigo-600">{parentInfo.children_count}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">Must change password</span>
+                        <span className={parentInfo.must_change_password ? 'text-amber-500 font-medium' : 'text-emerald-600 font-medium'}>
+                          {parentInfo.must_change_password ? 'Yes' : 'No'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
+                    Reset to generate a new temporary password.
+                  </p>
+                </>
+              ) : (
+                <div className="text-center py-4 space-y-2">
+                  <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto">
+                    <AlertTriangle size={18} className="text-slate-400" />
+                  </div>
+                  <p className="text-sm text-slate-600 dark:text-slate-300">No parent account linked.</p>
+                  <p className="text-xs text-slate-400">Click below to create one now.</p>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-3 px-5 pb-5">
+              <button onClick={onClose} className="flex-1 py-2 border border-slate-300 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                Close
+              </button>
+              {!parentReset && (
+                <button onClick={handleParentReset} disabled={parentLoading}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-purple-600 text-white rounded-xl text-sm font-semibold hover:bg-purple-700 disabled:opacity-60 transition-colors">
+                  {parentLoading ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
+                  {parentLoading ? 'Processing…' : (parentInfo ? 'Reset Password' : 'Create Account')}
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

@@ -52,3 +52,14 @@ export const restoreTeacher     = (id) => api.post(`/teachers/${id}/restore`);
 // Credentials
 export const getTeacherCredentials   = (id) => api.get(`/teachers/${id}/credentials`);
 export const resetTeacherCredentials = (id) => api.post(`/teachers/${id}/reset-credentials`);
+
+// Letter templates
+export const getLetterTemplates   = (params = {}) => api.get('/teachers/letter-templates', { params });
+export const getLetterTemplate    = (id)           => api.get(`/teachers/letter-templates/${id}`);
+export const createLetterTemplate = (data)         => api.post('/teachers/letter-templates', data);
+export const updateLetterTemplate = (id, data)     => api.put(`/teachers/letter-templates/${id}`, data);
+export const deleteLetterTemplate = (id)           => api.delete(`/teachers/letter-templates/${id}`);
+
+// Document generation
+export const generateTeacherDocument = (teacherId, data) =>
+  api.post(`/teachers/${teacherId}/generate-document`, data);

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Printer, ArrowLeft, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { getReceiptPrint } from '../api/fees';
 
 // ── Helpers ──────────────────────────────────────────────────────────────
@@ -47,6 +48,15 @@ function ThermalReceipt({ r }) {
           <p className="th-receipt-no">{r.receipt_no}</p>
           <p className="th-date">{fmtDate(r.payment_date)}{r.created_at ? ` • ${fmtTime(r.created_at)}` : ''}</p>
           {totalPayments > 1 && <p className="th-date">Payment {paymentIndex} of {totalPayments}</p>}
+          {/* QR code linking to public verification page */}
+          <div style={{ display: 'flex', justifyContent: 'center', margin: '6px 0 2px' }}>
+            <QRCodeSVG
+              value={`${window.location.origin}/verify-receipt/${r.receipt_no}`}
+              size={72}
+              level="M"
+            />
+          </div>
+          <p style={{ textAlign: 'center', fontSize: '8px', color: '#888', marginTop: '2px' }}>Scan to verify</p>
         </div>
 
         <div className="th-dash" />

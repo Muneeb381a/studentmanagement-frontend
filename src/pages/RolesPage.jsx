@@ -18,6 +18,7 @@ import toast from 'react-hot-toast';
 import {
   getRoles, getPermissions, createRole, updateRole,
   deleteRole, setRolePerms, getRbacUsers, setUserRole,
+  createRbacUser, deactivateUser,
 } from '../api/rbac';
 
 // ── Module display names & icons ──────────────────────────────────────────────
@@ -217,17 +218,121 @@ function CreateRoleModal({ onClose, onCreated }) {
   );
 }
 
+// ── Create User Modal ─────────────────────────────────────────────────────────
+function CreateUserModal({ roles, onClose, onCreated }) {
+  const [form, setForm]     = useState({ name: '', username: '', role: roles[0]?.name || 'teacher' });
+  const [saving, setSaving] = useState(false);
+  const [done, setDone]     = useState(null); // credentials after creation
+
+  const copyAll = () => {
+    navigator.clipboard.writeText(`Username: ${done.username}\nPassword: ${done.tempPassword}`);
+    toast.success('Copied to clipboard');
+  };
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!form.name.trim() || !form.username.trim()) return;
+    setSaving(true);
+    try {
+      const r   = await createRbacUser(form);
+      const d   = r.data || r;
+      setDone(d.credentials);
+      toast.success(`User "${form.username}" created`);
+      onCreated();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to create user');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const inputCls = 'mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md p-6">
+        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">
+          {done ? '✅ User Created' : 'Create New User'}
+        </h2>
+
+        {done ? (
+          <div className="space-y-4">
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-3 text-xs text-amber-700 dark:text-amber-400">
+              Save these now — the password will <strong>not be shown again</strong>.
+            </div>
+            <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4 font-mono text-sm space-y-2 border border-slate-200 dark:border-slate-700">
+              <div className="flex justify-between">
+                <span className="text-slate-400 text-xs">Username</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-100">{done.username}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400 text-xs">Temp Password</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-100">{done.tempPassword}</span>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={copyAll}
+                className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors">
+                📋 Copy Credentials
+              </button>
+              <button onClick={onClose}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                Close
+              </button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-slate-600 dark:text-slate-400">Full Name</label>
+              <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="e.g. Ahmed Khan" className={inputCls} required />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-slate-600 dark:text-slate-400">Username</label>
+              <input value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value.toLowerCase().replace(/\s+/g,'_') }))}
+                placeholder="e.g. ahmed_khan" className={inputCls} required />
+              <p className="text-xs text-slate-400 mt-1">Lowercase, no spaces. Must be unique.</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-slate-600 dark:text-slate-400">Role</label>
+              <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))} className={inputCls} required>
+                {roles.map(r => <option key={r.id} value={r.name}>{r.label}</option>)}
+              </select>
+            </div>
+            <p className="text-xs text-slate-400">A temporary password will be auto-generated. The user must change it on first login.</p>
+            <div className="flex gap-2 pt-1">
+              <button type="button" onClick={onClose}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                Cancel
+              </button>
+              <button type="submit" disabled={saving}
+                className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50 transition-colors">
+                {saving && <Spinner />}
+                Create User
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Users Tab ─────────────────────────────────────────────────────────────────
 function UsersTab({ roles }) {
-  const [users, setUsers]     = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch]   = useState('');
-  const [changing, setChanging] = useState(null); // userId being changed
+  const [users,       setUsers]       = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [search,      setSearch]      = useState('');
+  const [roleFilter,  setRoleFilter]  = useState('');
+  const [changing,    setChanging]    = useState(null);
+  const [deactivating,setDeactivating]= useState(null);
+  const [showCreate,  setShowCreate]  = useState(false);
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await getRbacUsers({ search, limit: 100 });
+      const r = await getRbacUsers({ search, role: roleFilter || undefined, limit: 200 });
       const d = r.data;
       setUsers(Array.isArray(d) ? d : (d?.data ?? []));
     } catch {
@@ -235,16 +340,20 @@ function UsersTab({ roles }) {
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [search, roleFilter]);
 
   useEffect(() => { loadUsers(); }, [loadUsers]);
 
-  async function handleRoleChange(userId, newRole) {
+  async function handleRoleChange(userId, newRole, currentRole) {
+    if (newRole === currentRole) return;
     setChanging(userId);
     try {
       await setUserRole(userId, newRole);
-      toast.success('Role updated successfully');
-      loadUsers();
+      toast.success('Role updated');
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole,
+        role_label: roles.find(r => r.name === newRole)?.label || newRole,
+        role_color: roles.find(r => r.name === newRole)?.color || '#6366f1',
+      } : u));
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to update role');
     } finally {
@@ -252,22 +361,48 @@ function UsersTab({ roles }) {
     }
   }
 
+  async function handleDeactivate(user) {
+    if (!confirm(`Deactivate "${user.name}"? They will no longer be able to log in.`)) return;
+    setDeactivating(user.id);
+    try {
+      await deactivateUser(user.id);
+      toast.success(`"${user.name}" deactivated`);
+      setUsers(prev => prev.filter(u => u.id !== user.id));
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to deactivate');
+    } finally {
+      setDeactivating(null);
+    }
+  }
+
+  const inputCls = 'rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 placeholder-slate-400';
+
   return (
     <div>
-      {/* Search bar */}
-      <div className="mb-4">
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-3 mb-4">
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Search users by name or username…"
-          className="w-full max-w-sm rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 placeholder-slate-400"
+          placeholder="Search by name or username…"
+          className={`${inputCls} w-64`}
         />
+        <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className={`${inputCls} w-40`}>
+          <option value="">All Roles</option>
+          {roles.map(r => <option key={r.id} value={r.name}>{r.label}</option>)}
+        </select>
+        <div className="ml-auto">
+          <button
+            onClick={() => setShowCreate(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors shadow-sm"
+          >
+            <span className="text-base leading-none">+</span> New User
+          </button>
+        </div>
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-12">
-          <Spinner size="lg" />
-        </div>
+        <div className="flex justify-center py-12"><Spinner size="lg" /></div>
       ) : (
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
           <table className="w-full text-sm">
@@ -278,6 +413,7 @@ function UsersTab({ roles }) {
                 <th className="px-4 py-3 text-left font-semibold text-slate-600 dark:text-slate-300">Current Role</th>
                 <th className="px-4 py-3 text-left font-semibold text-slate-600 dark:text-slate-300">Permissions</th>
                 <th className="px-4 py-3 text-left font-semibold text-slate-600 dark:text-slate-300">Change Role</th>
+                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
@@ -293,10 +429,8 @@ function UsersTab({ roles }) {
                   </td>
                   <td className="px-4 py-3 text-slate-500 dark:text-slate-400 font-mono text-xs">{user.username}</td>
                   <td className="px-4 py-3">
-                    <span
-                      className="inline-flex items-center px-2.5 py-1 rounded-full text-white text-xs font-semibold"
-                      style={{ backgroundColor: user.role_color || '#6366f1' }}
-                    >
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-white text-xs font-semibold"
+                      style={{ backgroundColor: user.role_color || '#6366f1' }}>
                       {user.role_label || user.role}
                     </span>
                   </td>
@@ -306,23 +440,31 @@ function UsersTab({ roles }) {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <select
-                        defaultValue={user.role}
-                        onChange={e => handleRoleChange(user.id, e.target.value)}
+                        value={user.role}
+                        onChange={e => handleRoleChange(user.id, e.target.value, user.role)}
                         disabled={changing === user.id}
                         className="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-50"
                       >
-                        {roles.map(r => (
-                          <option key={r.id} value={r.name}>{r.label}</option>
-                        ))}
+                        {roles.map(r => <option key={r.id} value={r.name}>{r.label}</option>)}
                       </select>
                       {changing === user.id && <Spinner />}
                     </div>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      onClick={() => handleDeactivate(user)}
+                      disabled={deactivating === user.id}
+                      title="Deactivate user"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40"
+                    >
+                      {deactivating === user.id ? <Spinner /> : '🚫'}
+                    </button>
                   </td>
                 </tr>
               ))}
               {!users.length && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-slate-400 dark:text-slate-500">
+                  <td colSpan={6} className="px-4 py-8 text-center text-slate-400 dark:text-slate-500">
                     No users found
                   </td>
                 </tr>
@@ -330,6 +472,14 @@ function UsersTab({ roles }) {
             </tbody>
           </table>
         </div>
+      )}
+
+      {showCreate && (
+        <CreateUserModal
+          roles={roles}
+          onClose={() => setShowCreate(false)}
+          onCreated={() => { loadUsers(); }}
+        />
       )}
     </div>
   );
